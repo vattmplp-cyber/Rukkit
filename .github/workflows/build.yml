@@ -1,0 +1,33 @@
+name: Build Rukkit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "0.9.4"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Make Gradle executable
+        run: chmod +x ./gradlew
+
+      - name: Build Rukkit
+        run: ./gradlew shadowJar --no-daemon
+
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rukkit
+          path: build/libs/*.jar
