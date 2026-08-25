@@ -77,6 +77,15 @@ if (allowed == null) {
 }
 
 if (!allowed) {
+    log.warn(
+        "Permission denied: command={}, player={}, isAdmin={}, adminPermission={}, playerPermission={}",
+        cmdObj.cmd,
+        connection.player != null ? connection.player.name : "<null>",
+        isAdmin,
+        Rukkit.getConfig().adminPermissions.get(cmdObj.cmd),
+        Rukkit.getConfig().playerPermissions.get(cmdObj.cmd)
+    );
+
     connection.sendServerMessage(LangUtil.getString("chat.privDenied"));
     return;
 }
