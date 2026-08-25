@@ -48,6 +48,9 @@ public class RukkitConfig extends BaseConfig
 
     public java.util.Map<String, Boolean> playerPermissions = new java.util.HashMap<>();
 	public java.util.Map<String, Boolean> adminPermissions = new java.util.HashMap<>();
+	public int helpPageSize = 10;
+	public boolean helpShowDisabledCommands = false;
+	public boolean helpShowDescriptions = true;
 
 	private void initDefaultPermissions() {
     playerPermissions.clear();
