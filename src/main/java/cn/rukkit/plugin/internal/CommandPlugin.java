@@ -590,20 +590,41 @@ public boolean onSend(RoomConnection con, String[] args) {
 	}
 
 	class CreditsCallback implements ChatCommandListener {
-		@Override
-		public boolean onSend(RoomConnection con, String[] args) {
-			if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 1) {
-				// Do nothing.
-			} else {
-				Rukkit.getRoundConfig().credits = Integer.parseInt(args[0]);
-				try {
-					con.currectRoom.broadcast(Packet.serverInfo(con.currectRoom.config));
-					con.handler.ctx.writeAndFlush(Packet.serverInfo(con.currectRoom.config, true));
-				} catch (IOException ignored) {}
-			}
-			return false;
-		}
-	}
+    @Override
+    public boolean onSend(RoomConnection con, String[] args) {
+        if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 1) {
+            return false;
+        }
+
+        int credits;
+
+        try {
+            credits = Integer.parseInt(args[0]);
+        } catch (NumberFormatException e) {
+            return false;
+        }
+
+        if (credits != 0
+                && credits != 1000
+                && credits != 2000
+                && credits != 5000
+                && credits != 10000
+                && credits != 50000
+                && credits != 100000
+                && credits != 200000) {
+            return false;
+        }
+
+        Rukkit.getRoundConfig().credits = credits;
+
+        try {
+            con.currectRoom.broadcast(Packet.serverInfo(con.currectRoom.config));
+            con.handler.ctx.writeAndFlush(Packet.serverInfo(con.currectRoom.config, true));
+        } catch (IOException ignored) {}
+
+        return false;
+    }
+}
 
     class SyncCallback implements ChatCommandListener {
         @Override
