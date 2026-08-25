@@ -108,22 +108,36 @@ if (!allowed) {
 	}
 
 	public void executeServerCommand(String cmd) {
-		String[] cmds = cmd.split("\\s+", 2);
+		String trimmed = cmd == null ? "" : cmd.trim();
+		if (trimmed.isEmpty()) return;
+
+		String[] cmds = trimmed.split("\\s+");
 		ServerCommand cmdObj = fetchServerCommand(cmds[0]);
 		if (cmdObj == null) {
 			System.out.println("Command not exist.Try 'help' to list all commands.");
 			return;
 		}
 		log.trace("cmd is:" + cmds[0]);
+
+		// The multi-server manager needs the complete command line, not a fixed
+		// argument count.
+		if ("server".equalsIgnoreCase(cmdObj.cmd)) {
+			String[] args = new String[Math.max(0, cmds.length - 1)];
+			if (args.length > 0) System.arraycopy(cmds, 1, args, 0, args.length);
+			cmdObj.getListener().onSend(args);
+			return;
+		}
+
 		if (cmds.length > 1 && cmdObj.args > 0) {
-			String[] args = cmds[1].split(" ", cmdObj.args);
+			int argCount = Math.min(cmdObj.args, cmds.length - 1);
+			String[] args = new String[argCount];
+			System.arraycopy(cmds, 1, args, 0, argCount);
 			cmdObj.getListener().onSend(args);
 		} else {
 			cmdObj.getListener().onSend(new String[0]);
 		}
 	}
 
-	
 	public ChatCommand fetchCommand(String cmd){
 		return loadedCommand.getOrDefault(cmd, null);
 	}

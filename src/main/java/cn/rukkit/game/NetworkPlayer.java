@@ -205,24 +205,25 @@ public class NetworkPlayer
 	}
 	
 	public boolean movePlayer(int index){
-		//If index larger then maxPlayer
-		if (index > Rukkit.getConfig().maxPlayer) return false;
+		if (index < 0 || index >= Rukkit.getConfig().maxPlayer) return false;
 		PlayerManager playerGroup = room.playerManager;
-		if (!playerGroup.get(index).isEmpty) {
+		NetworkPlayer target = playerGroup.get(index);
+		if (target == null || (!target.isEmpty && target != this)) {
 			return false;
 		}
-		this.playerIndex = index;
+		if (this.playerIndex == index) return true;
 		playerGroup.remove(this);
+		this.playerIndex = index;
 		playerGroup.set(index, this);
 		return true;
 	}
 
 	public boolean moveTeam(int team){
-		if(team > 9 || team < 0){
+		int maxTeams = Math.max(1, Rukkit.getConfig().maxTeams);
+		if(team < 0 || team >= maxTeams){
 			return false;
-		} else {
-			this.team = team;
 		}
+		this.team = team;
 		return true;
 	}
 

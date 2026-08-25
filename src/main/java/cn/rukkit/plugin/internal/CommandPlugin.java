@@ -212,103 +212,88 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 	}
 
 
-	// TODO: -move && -self-move 操作
+	// Move players between spawn slots. When a team is supplied, the exact
+	// spawn requested by the client is treated only as a team hint; the server
+	// chooses any free spawn in that team.
 	class MoveCallback implements ChatCommandListener {
-    private int type;
+		private int type;
 
-    public MoveCallback(int type) {
-        this.type = type;
-    }
+		public MoveCallback(int type) {
+			this.type = type;
+		}
 
-    @Override
-    public boolean onSend(RoomConnection con, String[] cmd) {
-        switch (type) {
-            case 0:
-                // .move <player> <target> [team]
-                if (!con.player.isAdmin || con.currectRoom.isGaming() || cmd.length < 2) {
-                    return false;
-                }
+		private int parseRequestedTeam(int raw, int spawnIndex) {
+			int maxTeams = Math.max(1, Rukkit.getConfig().maxTeams);
+			if (raw == -1 || raw == -2) {
+				// Client auto-team hint: derive A/B from the requested spawn parity.
+				return Math.floorMod(spawnIndex, maxTeams);
+			}
+			// Client sends internal zero-based team IDs (0/1).
+			if (raw >= 0 && raw < maxTeams) return raw;
+			return -1;
+		}
 
-                try {
-                    PlayerManager playerGroup = con.currectRoom.playerManager;
+		@Override
+		public boolean onSend(RoomConnection con, String[] cmd) {
+			if (con.player == null || con.currectRoom.isGaming()) return false;
+			try {
+				PlayerManager playerGroup = con.currectRoom.playerManager;
 
-                    NetworkPlayer fromPlayer =
-                            playerGroup.get(Integer.parseInt(cmd[0]) - 1);
+				if (type == 0) {
+					// .move <fromSlot> <requestedSlot> [team]
+					if (!con.player.isAdmin || cmd.length < 2) return false;
+					int fromSlot = Integer.parseInt(cmd[0]) - 1;
+					int requestedSlot = Integer.parseInt(cmd[1]) - 1;
+					if (fromSlot < 0 || fromSlot >= Rukkit.getConfig().maxPlayer ||
+							requestedSlot < 0 || requestedSlot >= Rukkit.getConfig().maxPlayer) return false;
 
-                    NetworkPlayer targetPlayer =
-                            playerGroup.get(Integer.parseInt(cmd[1]) - 1);
+					NetworkPlayer fromPlayer = playerGroup.get(fromSlot);
+					if (fromPlayer == null || fromPlayer.isEmpty) return false;
 
-                    if (fromPlayer == null || targetPlayer == null) {
-                        return false;
-                    }
+					if (cmd.length >= 3) {
+						int team = parseRequestedTeam(Integer.parseInt(cmd[2]), requestedSlot);
+						if (team < 0 || team >= Math.max(1, Rukkit.getConfig().maxTeams)) return false;
+						if (!playerGroup.movePlayerToTeam(fromPlayer, team)) {
+							return false;
+						}
+					} else {
+						// Without a team argument keep the original exact-slot admin move.
+						NetworkPlayer targetPlayer = playerGroup.get(requestedSlot);
+						if (targetPlayer == null || targetPlayer == fromPlayer) return false;
+						if (targetPlayer.isEmpty) {
+							if (!fromPlayer.movePlayer(requestedSlot)) return false;
+						} else {
+							playerGroup.set(fromSlot, targetPlayer);
+							playerGroup.set(requestedSlot, fromPlayer);
+							fromPlayer.playerIndex = requestedSlot;
+							targetPlayer.playerIndex = fromSlot;
+						}
+					}
+					con.sendServerMessage(LangUtil.getString("chat.moveComplete"));
+				} else {
+					// .self_move <requestedSlot> [team]
+					if (cmd.length < 1) return false;
+					int requestedSlot = Integer.parseInt(cmd[0]) - 1;
+					if (requestedSlot < 0 || requestedSlot >= Rukkit.getConfig().maxPlayer) return false;
 
-                    if (cmd.length == 3) {
-                        int team = Integer.parseInt(cmd[2]);
-
-                        // Only Team A (1) or Team B (2)
-                        if (team != 1 && team != 2) {
-                            return false;
-                        }
-
-                        fromPlayer.team = team - 1;
-                    }
-
-                    if (fromPlayer.movePlayer(Integer.parseInt(cmd[1]) - 1)) {
-                        con.sendServerMessage(LangUtil.getString("chat.moveComplete"));
-                    } else {
-                        int fromslot = fromPlayer.playerIndex;
-                        int toslot = targetPlayer.playerIndex;
-
-                        if (fromslot == toslot) {
-                            con.sendServerMessage("not same player!");
-                            break;
-                        }
-
-                        playerGroup.remove(targetPlayer);
-                        fromPlayer.movePlayer(toslot);
-                        targetPlayer.movePlayer(fromslot);
-                    }
-
-                } catch (Exception e) {
-                    log.error("Error:", e);
-                }
-
-                break;
-
-            case 1:
-                // .self_move <target> [team]
-                if (con.currectRoom.isGaming() || cmd.length < 1) {
-                    return false;
-                }
-
-                try {
-                    if (cmd.length == 2) {
-                        int team = Integer.parseInt(cmd[1]);
-
-                        // Only Team A (1) or Team B (2)
-                        if (team != 1 && team != 2) {
-                            return false;
-                        }
-
-                        con.player.team = team - 1;
-                    }
-
-                    if (con.player.movePlayer(Integer.parseInt(cmd[0]) - 1)) {
-                        con.sendServerMessage(LangUtil.getString("chat.moveComplete"));
-                    } else {
-                        con.sendServerMessage(LangUtil.getString("chat.playerExist"));
-                    }
-
-                } catch (Exception e) {
-                    log.error("Error:", e);
-                }
-
-                break;
-        }
-
-        return false;
-    }
-}
+					if (cmd.length >= 2) {
+						int team = parseRequestedTeam(Integer.parseInt(cmd[1]), requestedSlot);
+						if (team < 0 || team >= Math.max(1, Rukkit.getConfig().maxTeams)) return false;
+						if (!playerGroup.movePlayerToTeam(con.player, team)) return false;
+					} else {
+						if (!con.player.movePlayer(requestedSlot)) {
+							con.sendServerMessage(LangUtil.getString("chat.playerExist"));
+							return false;
+						}
+					}
+					con.sendServerMessage(LangUtil.getString("chat.moveComplete"));
+				}
+			} catch (Exception e) {
+				log.debug("Move command rejected: {}", e.toString());
+			}
+			return false;
+		}
+	}
 
 	// TODO: -qc 操作
 	class QcCallback implements ChatCommandListener {
@@ -323,64 +308,36 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 
 	class TeamCallback implements ChatCommandListener {
 		private int type;
-		public TeamCallback(int type) {
-			this.type = type;
-		}
+		public TeamCallback(int type) { this.type = type; }
+
 		@Override
-public boolean onSend(RoomConnection con, String[] args) {
-    if (args.length < 1) {
-        return false;
-    }
-
-    switch (type) {
-        case 0:
-            // .team <player> <team>
-            if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 2) {
-                return false;
-            }
-
-            try {
-                int team = Integer.parseInt(args[1]);
-
-                // Only Team A (1) or Team B (2)
-                if (team != 1 && team != 2) {
-                    return false;
-                }
-
-                int slot = Integer.parseInt(args[0]) - 1;
-
-                NetworkPlayer targetPlayer = con.currectRoom.playerManager.get(slot);
-                if (targetPlayer == null) {
-                    return false;
-                }
-
-                targetPlayer.team = team - 1;
-            } catch (Exception ignored) {
-                return false;
-            }
-
-            break;
-
-        case 1:
-            // .self_team <team>
-            try {
-                int team = Integer.parseInt(args[0]);
-
-                // Only Team A (1) or Team B (2)
-                if (team != 1 && team != 2) {
-                    return false;
-                }
-
-                con.player.team = team - 1;
-            } catch (Exception ignored) {
-                return false;
-            }
-
-            break;
-    }
-
-    return false;
-}
+		public boolean onSend(RoomConnection con, String[] args) {
+			if (con.player == null || args.length < 1) return false;
+			try {
+				int team;
+				if (type == 0) {
+					// .team <player> <team> -- admin selects A/B, server chooses any free spawn in that team.
+					if (!con.player.isAdmin || con.currectRoom.isGaming() || args.length < 2) return false;
+					int slot = Integer.parseInt(args[0]) - 1;
+					team = Integer.parseInt(args[1]);
+					if (team < 1 || team > Math.max(1, Rukkit.getConfig().maxTeams)) return false;
+					NetworkPlayer target = con.currectRoom.playerManager.get(slot);
+					if (target == null || target.isEmpty) return false;
+					if (!con.currectRoom.playerManager.movePlayerToTeam(target, team - 1)) return false;
+				} else {
+					// .self_team <team> -- server chooses any free spawn in that team.
+					team = Integer.parseInt(args[0]);
+					if (team < 1 || team > Math.max(1, Rukkit.getConfig().maxTeams)) return false;
+					if (!con.currectRoom.playerManager.movePlayerToTeam(con.player, team - 1)) return false;
+				}
+				try {
+					con.updateTeamList(false);
+				} catch (IOException ignored) {}
+			} catch (Exception e) {
+				return false;
+			}
+			return false;
+		}
 	}
 
 	static class HelpCallback implements ChatCommandListener {
@@ -394,6 +351,7 @@ public boolean onSend(RoomConnection con, String[] args) {
                 .values()) {
 
             ChatCommand cmd = (ChatCommand) value;
+            if ("qc".equals(cmd.cmd)) continue;
 
             boolean allowed = hasPermission(con, cmd.cmd);
 
@@ -592,72 +550,33 @@ public boolean onSend(RoomConnection con, String[] args) {
 
 	class IncomeCallback implements ChatCommandListener {
 		@Override
-public boolean onSend(RoomConnection con, String[] args) {
-    if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 1) {
-        return false;
-    }
-
-    float income;
-
-    try {
-        income = Float.parseFloat(args[0]);
-    } catch (NumberFormatException e) {
-        con.sendServerMessage("Allowed income values: 1, 2, 2.5, 3");
-        return false;
-    }
-
-    if (income != 1.0f && income != 2.0f && income != 2.5f && income != 3.0f) {
-        con.sendServerMessage("Allowed income values: 1, 2, 2.5, 3");
-        return false;
-    }
-
-    Rukkit.getRoundConfig().income = income;
-
-    try {
-        con.currectRoom.broadcast(Packet.serverInfo(con.currectRoom.config));
-        con.handler.ctx.writeAndFlush(Packet.serverInfo(con.currectRoom.config, true));
-    } catch (IOException ignored) {}
-
-    return false;
-}
+		public boolean onSend(RoomConnection con, String[] args) {
+			if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 1) return false;
+			try {
+				float income = Float.parseFloat(args[0]);
+				if (!Rukkit.getConfig().allowedIncomeValues.contains(income)) return false;
+				Rukkit.getRoundConfig().income = income;
+				con.currectRoom.broadcast(Packet.serverInfo(con.currectRoom.config));
+				con.handler.ctx.writeAndFlush(Packet.serverInfo(con.currectRoom.config, true));
+			} catch (Exception ignored) {}
+			return false;
+		}
 	}
 
 	class CreditsCallback implements ChatCommandListener {
-    @Override
-    public boolean onSend(RoomConnection con, String[] args) {
-        if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 1) {
-            return false;
-        }
-
-        int credits;
-
-        try {
-            credits = Integer.parseInt(args[0]);
-        } catch (NumberFormatException e) {
-            return false;
-        }
-
-        if (credits != 0
-                && credits != 1000
-                && credits != 2000
-                && credits != 5000
-                && credits != 10000
-                && credits != 50000
-                && credits != 100000
-                && credits != 200000) {
-            return false;
-        }
-
-        Rukkit.getRoundConfig().credits = credits;
-
-        try {
-            con.currectRoom.broadcast(Packet.serverInfo(con.currectRoom.config));
-            con.handler.ctx.writeAndFlush(Packet.serverInfo(con.currectRoom.config, true));
-        } catch (IOException ignored) {}
-
-        return false;
-    }
-}
+		@Override
+		public boolean onSend(RoomConnection con, String[] args) {
+			if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 1) return false;
+			try {
+				int credits = Integer.parseInt(args[0]);
+				if (!Rukkit.getConfig().allowedCreditsValues.contains(credits)) return false;
+				Rukkit.getRoundConfig().credits = credits;
+				con.currectRoom.broadcast(Packet.serverInfo(con.currectRoom.config));
+				con.handler.ctx.writeAndFlush(Packet.serverInfo(con.currectRoom.config, true));
+			} catch (Exception ignored) {}
+			return false;
+		}
+	}
 
     class SyncCallback implements ChatCommandListener {
         @Override

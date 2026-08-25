@@ -131,7 +131,7 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter {
 
 				// 无可用房间，踢出
 				if (currentRoom == null) {
-					ctx.writeAndFlush(Packet.kick(LangUtil.getString("rukkit.gameFull")));
+					ctx.writeAndFlush(Packet.kick(Rukkit.getConfig().notification("rukkit.gameFull", LangUtil.getString("rukkit.gameFull"), "serverName", Rukkit.getConfig().serverUser, "serverPort", Rukkit.getConfig().serverPort, "roomId", currentRoom == null ? -1 : currentRoom.roomId)));
 					return;
 				}
 
@@ -190,7 +190,7 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter {
 						// PlayerJoinEvent.getListenerList().callListeners(new PlayerJoinEvent(conn.player));
 						PlayerReconnectEvent.getListenerList().callListeners(new PlayerReconnectEvent(conn.player));
 					} else {
-						ctx.writeAndFlush(p.kick(LangUtil.getString("rukkit.gameStarted")));
+						ctx.writeAndFlush(p.kick(Rukkit.getConfig().notification("rukkit.gameStarted", LangUtil.getString("rukkit.gameStarted"), "serverName", Rukkit.getConfig().serverUser, "serverPort", Rukkit.getConfig().serverPort, "roomId", currentRoom.roomId, "playerName", playerName)));
 					}
 				}
 

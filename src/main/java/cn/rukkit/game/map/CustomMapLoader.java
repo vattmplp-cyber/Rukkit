@@ -19,16 +19,16 @@ import java.io.FileNotFoundException;
 import java.util.ArrayList;
 
 public class CustomMapLoader {
-    private static String MAP_FOLDER = Rukkit.getEnvPath() + "/maps";
+    private static String mapFolder() { return new File(Rukkit.getEnvPath(), Rukkit.getConfig().mapsPath).getAbsolutePath(); }
     private static final Logger log = LoggerFactory.getLogger(CustomMapLoader.class);
 
     public static boolean createDir(){
-        File folder = new File(MAP_FOLDER);
+        File folder = new File(mapFolder());
         folder.mkdir();
         if(!folder.isDirectory()){
             log.warn("Not a dir.Change a another dir...");
-            MAP_FOLDER = MAP_FOLDER + "_rukkit";
-            folder = new File(MAP_FOLDER);
+            String fallback = mapFolder() + "_rukkit";
+            folder = new File(fallback);
             folder.mkdir();
             if(!folder.exists() || !folder.isDirectory()){
                 log.error("Load failed.Stop working.");
@@ -39,7 +39,7 @@ public class CustomMapLoader {
     }
 
     public static ArrayList<String> getMapList(){
-        File folder = new File(MAP_FOLDER);
+        File folder = new File(mapFolder());
         ArrayList<String> list = new ArrayList<String>();
         for(String f: folder.list()){
             String[] n = f.split("\\.");
@@ -51,7 +51,7 @@ public class CustomMapLoader {
     }
 
     public static ArrayList<String> getMapNameList(){
-        File folder = new File(MAP_FOLDER);
+        File folder = new File(mapFolder());
         ArrayList<String> list = new ArrayList<String>();
         for(String f: folder.list()){
             String[] n = f.split("\\.");
@@ -67,10 +67,10 @@ public class CustomMapLoader {
     }
 
     public static FileInputStream getStreamById(int id) throws FileNotFoundException {
-        return new FileInputStream(getMapList().get(id));
+        return new FileInputStream(mapFolder() + "/" + getMapList().get(id));
     }
 
     public static FileInputStream getStreamByName(String name) throws FileNotFoundException{
-        return new FileInputStream(MAP_FOLDER + "/" + name);
+        return new FileInputStream(mapFolder() + "/" + name);
     }
 }

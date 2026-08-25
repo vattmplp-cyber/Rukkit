@@ -19,7 +19,7 @@ import org.slf4j.*;
 public class ModManager 
 {
 	private Logger log = LoggerFactory.getLogger(ModLoader.class);;
-	private static String MOD_PATH = Rukkit.getEnvPath() + "/mods";
+	private static String modPath() { return new File(Rukkit.getEnvPath(), Rukkit.getConfig().modsPath).getAbsolutePath(); }
 	private HashMap<String, Mod> loadedMods = new HashMap<String, Mod>();
 	//private HashMap<String, ArrayList<ModUnit>> loadedMods = new HashMap<String, ArrayList<ModUnit>>();
 
@@ -31,7 +31,7 @@ public class ModManager
 	}
 
 	private boolean createModDir() {
-		File f = new File(MOD_PATH);
+		File f = new File(modPath());
 		if (f.exists() && f.isDirectory()) {
 			return true;
 		} else {
@@ -43,7 +43,7 @@ public class ModManager
 	}
 
 	public void loadAllModsInDir() {
-		File dir = new File(MOD_PATH);
+		File dir = new File(modPath());
 		log.info("" + dir);
 		for (File f: dir.listFiles()) {
 			if (f.getName().startsWith("mod_")) {
@@ -84,7 +84,7 @@ public class ModManager
 	}
 
 	public void loadModInDir(String modname) throws IOException {
-		loadMod(modname, new File(MOD_PATH + "/mod_" + modname + ".json"));
+		loadMod(modname, new File(modPath() + "/mod_" + modname + ".json"));
 	}
 
 	public void loadMod(String modname, Mod mod) {

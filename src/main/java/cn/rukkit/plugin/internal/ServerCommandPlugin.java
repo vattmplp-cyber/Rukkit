@@ -23,6 +23,7 @@ import cn.rukkit.network.RoomManager;
 import cn.rukkit.network.packet.Packet;
 import cn.rukkit.plugin.PluginConfig;
 import cn.rukkit.util.LangUtil;
+import cn.rukkit.service.ServerInstanceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -267,6 +268,109 @@ public class ServerCommandPlugin extends InternalRukkitPlugin implements EventLi
 //        }
 //    }
 
+    class ServerManagerCallback implements ServerCommandListener {
+        @Override
+        public void onSend(String[] args) {
+            if (!Rukkit.getConfig().serverManagerEnabled) {
+                System.out.println("Server manager is disabled in rukkit.yml");
+                return;
+            }
+            ServerInstanceManager manager = Rukkit.getServerInstanceManager();
+            if (args.length == 0) { printHelp(); return; }
+            try {
+                String action = args[0].toLowerCase();
+                switch (action) {
+                    case "help":
+                        printHelp(); return;
+                    case "create":
+                        if (args.length < 2) { System.out.println("Usage: server create <name> [port]"); return; }
+                        System.out.println("Created: " + manager.create(args[1], args.length >= 3 ? Integer.valueOf(args[2]) : null)); return;
+                    case "clone":
+                        if (args.length < 3) { System.out.println("Usage: server clone <source> <name> [port]"); return; }
+                        System.out.println(manager.cloneServer(args[1], args[2], args.length >= 4 ? Integer.valueOf(args[3]) : null)); return;
+                    case "start":
+                        if (args.length < 2) { System.out.println("Usage: server start <target> [console|background]"); return; }
+                        Boolean console = null;
+                        if (args.length >= 3) console = !"background".equalsIgnoreCase(args[2]);
+                        System.out.println(manager.startTargets(args[1], console)); return;
+                    case "stop":
+                        if (args.length < 2) { System.out.println("Usage: server stop <target>"); return; }
+                        System.out.println(manager.stopTargets(args[1])); return;
+                    case "restart":
+                        if (args.length < 2) { System.out.println("Usage: server restart <target>"); return; }
+                        System.out.println(manager.restartTargets(args[1])); return;
+                    case "kill":
+                        if (args.length < 2) { System.out.println("Usage: server kill <target>"); return; }
+                        System.out.println(manager.killTargets(args[1])); return;
+                    case "list":
+                    case "status":
+                        System.out.print(manager.list(args.length >= 2 ? args[1] : "all")); return;
+                    case "info":
+                        if (args.length < 2) { System.out.println("Usage: server info <target>"); return; }
+                        System.out.println(manager.infoTarget(args[1])); return;
+                    case "delete":
+                        if (args.length < 2) { System.out.println("Usage: server delete <name> [force]"); return; }
+                        System.out.println(manager.delete(args[1], args.length >= 3 && "force".equalsIgnoreCase(args[2]))); return;
+                    case "select":
+                    case "use":
+                        if (args.length < 2) { System.out.println("Usage: server select <target>"); return; }
+                        System.out.println(manager.select(args[1])); return;
+                    case "selected":
+                        System.out.println(manager.selected()); return;
+                    case "send":
+                    case "exec":
+                        if (args.length < 3) { System.out.println("Usage: server send <target> <command...>"); return; }
+                        System.out.println(manager.sendTargets(args[1], join(args, 2))); return;
+                    case "broadcast":
+                        if (args.length < 2) { System.out.println("Usage: server broadcast <command...>"); return; }
+                        System.out.println(manager.sendTargets("all", join(args, 1))); return;
+                    case "publish":
+                        if (args.length < 2) { System.out.println("Usage: server publish <target> [start|stop|status]"); return; }
+                        String pub = args.length == 2 ? "publish start" : "publish " + join(args, 2);
+                        System.out.println(manager.sendTargets(args[1], pub)); return;
+                    default:
+                        System.out.println("Unknown server-manager action: " + args[0]);
+                        printHelp();
+                }
+            } catch (Exception e) {
+                System.out.println("Server manager error: " + e.getMessage());
+            }
+        }
+
+        private String join(String[] args, int start) {
+            StringBuilder b = new StringBuilder();
+            for (int i = start; i < args.length; i++) {
+                if (b.length() > 0) b.append(' ');
+                b.append(args[i]);
+            }
+            return b.toString();
+        }
+
+        private void printHelp() {
+            System.out.println("Server manager commands:");
+            System.out.println("  server help");
+            System.out.println("  server list [all|running|stopped]");
+            System.out.println("  server info <target>");
+            System.out.println("  server create <name> [port]");
+            System.out.println("  server clone <source> <name> [port]");
+            System.out.println("  server start <target> [console|background]");
+            System.out.println("  server stop <target>");
+            System.out.println("  server restart <target>");
+            System.out.println("  server kill <target>");
+            System.out.println("  server delete <name> [force]");
+            System.out.println("  server select <target>");
+            System.out.println("  server selected");
+            System.out.println("  server send <target> <command...>");
+            System.out.println("  server broadcast <command...>");
+            System.out.println("  server publish <target> [start|stop|status]");
+            System.out.println("Targets: all, selected, 2, 3-8, 2,5,7, server2, server2,server5");
+            System.out.println("Examples:");
+            System.out.println("  server broadcast publish start");
+            System.out.println("  server publish 3-8 start");
+            System.out.println("  server send server2 publish stop");
+        }
+    }
+
     @Override
     public void onLoad() {
         getLogger().info("ServerCommandPlugin::onLoad...");
@@ -283,6 +387,7 @@ public class ServerCommandPlugin extends InternalRukkitPlugin implements EventLi
         mgr.registerServerCommand(new ServerCommand("say", LangUtil.getString("server.say"), 2, new SayCallback(), this));
         mgr.registerServerCommand(new ServerCommand("maps", LangUtil.getString("chat.maps"), 1, new MapsCallback(0), this));
         mgr.registerServerCommand(new ServerCommand("map", LangUtil.getString("chat.map"), 1, new MapsCallback(1), this));
+        mgr.registerServerCommand(new ServerCommand("server", "Multi-server manager. Use server help.", 0, new ServerManagerCallback(), this));
         //mgr.registerServerCommand(new ServerCommand("cmaps", LangUtil.getString("chat.cmaps"), 1, new CustomMapsCallback(0), this));
         //mgr.registerServerCommand(new ServerCommand("cmap", LangUtil.getString("chat.cmap"), 1, new CustomMapsCallback(1), this));
         //mgr.registerServerCommand(new ServerCommand("question", "Question a player.", 2, new QuestionCallback(), this));

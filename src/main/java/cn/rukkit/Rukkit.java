@@ -54,6 +54,8 @@ public class Rukkit {
 	public final static String PLUGIN_API_VERSION = "0.8.0";
 	private static RoomManager roomManager;
 	private static SaveData defaultSave;
+	private static ServerInstanceManager serverInstanceManager;
+	private static ServerControlServer serverControlServer;
 
 	public static void shutdown(String message) {
 		// TODO: Implement this method
@@ -68,7 +70,13 @@ public class Rukkit {
 		}
 		log.info("Stop ThreadManager...");
 		getThreadManager().shutdown();
+		log.info("Stop control server...");
+		if (serverControlServer != null) serverControlServer.stop();
+		log.info("Stop child servers...");
+		if (serverInstanceManager != null) serverInstanceManager.stopAll();
 		log.info("Shutdown server...");
+		try { if (serverControlServer != null) serverControlServer.stop(); } catch (Exception ignored) {}
+		try { if (serverInstanceManager != null) serverInstanceManager.stopAll(); } catch (Exception ignored) {}
 		getGameServer().stopServer();
 		log.info("Stop terminal...");
 		RukkitLauncher.isTerminalRunning = false;
@@ -113,6 +121,8 @@ public class Rukkit {
 	public static RukkitConfig getConfig() {
 		return config;
 	}
+
+	public static Logger getLogger() { return log; }
 
 	/**
 	 * Get a ingame config.
@@ -164,6 +174,8 @@ public class Rukkit {
 			writer.close();
 		}
 		config = yaml.loadAs((new FileInputStream(confFile)), RukkitConfig.class);
+		if (config == null) config = new RukkitConfig();
+		config.applyDefaults();
 	}
 
 	public static final void loadRoundConfig() throws IOException {
@@ -224,6 +236,10 @@ public class Rukkit {
 		return roomManager;
 	}
 
+	public static ServerInstanceManager getServerInstanceManager() {
+		return serverInstanceManager;
+	}
+
 	public static void loadDefaultSave() throws IOException {
 		InputStream in = Rukkit.class.getClassLoader().getResourceAsStream("defaultSave");
 		byte[] data = new byte[in.available()];
@@ -279,6 +295,8 @@ public class Rukkit {
 		threadManager = new ThreadManager(config.threadPoolCount);
 		log.info("init::ModManager");
 		modManager = new ModManager();
+		serverInstanceManager = new ServerInstanceManager();
+		serverControlServer = new ServerControlServer();
 		/**
 		 * ATTENTION!!!这里仅限dubug进行注释，正式使用请去掉！！！
 		 */
@@ -299,6 +317,7 @@ public class Rukkit {
 		pluginManager.loadPlugin(new TestPlugin());
 		pluginManager.loadPlugin(new ServerCommandPlugin());
 		pluginManager.loadPluginInDir();
+		try { if (config.serverManagerControlEnabled) serverControlServer.start(); } catch (IOException e) { log.warn("Server control start failed", e); }
 		
 		log.info("start::game server on port:" + config.serverPort);
 		threadManager.submit(() -> {

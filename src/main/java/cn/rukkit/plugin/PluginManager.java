@@ -27,7 +27,7 @@ import org.yaml.snakeyaml.*;
 
 public class PluginManager 
 {
-	private static String PLUGIN_FOLDER= Rukkit.getEnvPath() + "/plugins";
+	private static String pluginFolder() { return new File(Rukkit.getEnvPath(), Rukkit.getConfig().pluginsPath).getAbsolutePath(); }
 	private static Logger log = LoggerFactory.getLogger(PluginManager.class);
 	private static boolean isServerDone = false;
 	private static HashMap<String, RukkitPlugin> pluginMap = new LinkedHashMap<>();
@@ -35,12 +35,12 @@ public class PluginManager
 	public void loadPluginInDir() throws IOException
 	{
 		log.info("Plugin loader started");
-		File folder = new File(PLUGIN_FOLDER);
+		File folder = new File(pluginFolder());
 		folder.mkdir();
 		if (!folder.isDirectory())
 		{
 			log.warn("Not a dir.Change a another dir...");
-			folder = new File(PLUGIN_FOLDER + "_rukkit");
+			folder = new File(pluginFolder() + "_rukkit");
 			folder.mkdir();
 			if (!folder.exists() || !folder.isDirectory())
 			{
@@ -68,7 +68,7 @@ public class PluginManager
 
 						// 插件无效，未配置id
 						if (pluginConf.id == null) {
-							log.warn(MessageFormat.format(LangUtil.getString("rukkit.plugin.invalid"), f.getName()));
+							log.warn(Rukkit.getConfig().notification("rukkit.plugin.invalid", LangUtil.getString("rukkit.plugin.invalid"), "fileName", f.getName(), "serverName", Rukkit.getConfig().serverUser));
 							break;
 						}
 
@@ -124,7 +124,7 @@ public class PluginManager
 	public void loadPlugin(RukkitPlugin plugin)
 	{
 		if (plugin.getPluginId() == null) {
-			log.warn(MessageFormat.format(LangUtil.getString("rukkit.plugin.invalid"), "<Dynamic Plugin>"));
+			log.warn(Rukkit.getConfig().notification("rukkit.plugin.invalid", LangUtil.getString("rukkit.plugin.invalid"), "fileName", "<Dynamic Plugin>", "serverName", Rukkit.getConfig().serverUser));
 		}
 
 		log.info("Loading plugin: " + plugin.config.id);

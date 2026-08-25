@@ -51,9 +51,84 @@ public class PlayerManager
 	* team changed by index.
 	*/
 	public void addWithTeam(NetworkPlayer p){
-		if (add(p) % 2 == 1) {
-			p.team = 1;
+		int maxTeams = Math.max(1, Rukkit.getConfig().maxTeams);
+		int bestTeam = 0;
+		int bestCount = Integer.MAX_VALUE;
+		int bestFree = -1;
+
+		// Auto-assign to the least populated team, while always choosing
+		// a real free spawn belonging to that team. For maxTeams=2 this is
+		// A: slots 1,3,5... and B: slots 2,4,6...
+		for (int team = 0; team < maxTeams; team++) {
+			int count = 0;
+			int free = 0;
+			for (int i = team; i < players.length; i += maxTeams) {
+				if (players[i].isEmpty) {
+					free++;
+				} else {
+					count++;
+				}
+			}
+			if (free > 0 && (count < bestCount || (count == bestCount && free > bestFree))) {
+				bestTeam = team;
+				bestCount = count;
+				bestFree = free;
+			}
 		}
+
+		if (movePlayerToTeam(p, bestTeam)) {
+			return;
+		}
+
+		// Last-resort fallback; should only happen if the manager is full.
+		add(p);
+		p.team = p.playerIndex % maxTeams;
+	}
+
+	/**
+	 * Returns the first free spawn belonging to the requested team.
+	 * With maxTeams=2, team 0 uses player slots 1,3,5,... and team 1 uses
+	 * player slots 2,4,6,... (one-based slot numbers).
+	 */
+	public int findFreeSpawnForTeam(int team) {
+		int maxTeams = Math.max(1, Rukkit.getConfig().maxTeams);
+		if (team < 0 || team >= maxTeams) return -1;
+		for (int i = team; i < players.length; i += maxTeams) {
+			if (players[i].isEmpty) return i;
+		}
+		return -1;
+	}
+
+	/**
+	 * Moves a player to any free spawn in the requested team. The exact spawn
+	 * number requested by the client is intentionally ignored when this method
+	 * is used; the server picks any free spawn for that team.
+	 */
+	public boolean movePlayerToTeam(NetworkPlayer p, int team) {
+		int maxTeams = Math.max(1, Rukkit.getConfig().maxTeams);
+		if (p == null || team < 0 || team >= maxTeams) return false;
+
+		int current = p.playerIndex;
+		if (current >= 0 && current < players.length && current % maxTeams == team) {
+			p.team = team;
+			players[current] = p;
+			return true;
+		}
+
+		int target = findFreeSpawnForTeam(team);
+		if (target < 0) return false;
+
+		if (current >= 0 && current < players.length && players[current] == p) {
+			NetworkPlayer empty = new NetworkPlayer();
+			empty.playerIndex = current;
+			empty.team = current % maxTeams;
+			players[current] = empty;
+		}
+
+		p.playerIndex = target;
+		p.team = team;
+		players[target] = p;
+		return true;
 	}
 
 	/**
@@ -74,6 +149,7 @@ public class PlayerManager
 	* Remove player by index.
 	*/
 	public void remove(int index){
+        if (index < 0 || index >= players.length) return;
 //		if(Rukkit.getConfig().nonStopMode) {
 //			players[index] = new NetworkPlayer();
 //			return;
@@ -90,7 +166,7 @@ public class PlayerManager
 	* Get player by index.
 	*/
 	public NetworkPlayer get(int index){
-		if (index > players.length - 1) return null;
+		if (index < 0 || index > players.length - 1) return null;
 		return players[index];
 	}
 

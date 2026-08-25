@@ -1,0 +1,111 @@
+# Server
+serverUser: "Auto Server 4+ [CA-MB]"
+welcomeMsg: "Welcome to Auto Server, {playerName}!"
+serverMotd: "Auto Server 4+ [CA-MB]"
+serverPort: 51234
+maxPlayer: 10
+maxRoom: 1
+minStartPlayer: 8
+maxUnitsPerPlayer: 1000
+
+# Round / team rules
+maxTeams: 2
+allowedIncomeValues: [1.0, 2.0, 2.5, 3.0]
+allowedCreditsValues: [0, 1000, 2000, 5000, 10000, 50000, 100000, 200000]
+
+# Help
+helpPageSize: 10
+helpShowDisabledCommands: false
+helpShowDescriptions: true
+helpHiddenCommands:
+  - qc
+
+# Permissions
+playerPermissions:
+  help: true
+  state: false
+  version: false
+  t: true
+  maps: true
+  map: false
+  cmaps: true
+  cmap: false
+  kick: false
+  team: true
+  self_team: true
+  move: false
+  self_move: true
+  qc: true
+  fog: false
+  nukes: false
+  startingunits: false
+  income: false
+  share: true
+  credits: false
+  start: false
+  sync: false
+  i: true
+  chksum: true
+  maping: true
+  list: true
+  surrender: true
+  afk: true
+  y: true
+  n: true
+
+adminPermissions:
+  help: true
+  state: false
+  version: false
+  t: true
+  maps: true
+  map: true
+  cmaps: false
+  cmap: true
+  kick: false
+  team: true
+  self_team: true
+  move: true
+  self_move: true
+  qc: true
+  fog: true
+  nukes: true
+  startingunits: false
+  income: false
+  share: false
+  credits: true
+  start: true
+  sync: true
+  i: true
+  chksum: true
+  maping: true
+  list: true
+  surrender: true
+  afk: true
+  y: true
+  n: true
+
+# Shared resources for multi-server children
+pluginsPath: "plugins"
+mapsPath: "maps"
+modsPath: "mods"
+
+# Multi-server manager
+serverManagerEnabled: true
+serverManagerOpenConsole: true
+serverManagerRoot: "servers"
+serverManagerBasePort: 5200
+serverManagerMaxServers: 50
+serverManagerControlEnabled: true
+serverManagerControlPortOffset: 10000
+serverManagerControlPort: 15123
+serverManagerControlToken: ""
+
+# Editable server notifications. Placeholders: {playerName}, {reason}, {serverName}, {serverPort}, {roomId}.
+notifications:
+  rukkit.playerJoin: "Player {playerName} joined the server!"
+  rukkit.playerLeft: "Player {playerName} left the server({reason})!"
+  rukkit.playerReconnect: "Player {playerName} reconnected!"
+  rukkit.playerSharingControlDueDisconnected: "Player {playerName} shared control because of disconnect."
+  rukkit.gameFull: "Game is full!"
+  rukkit.gameStarted: "Started game on server: {serverName}"
