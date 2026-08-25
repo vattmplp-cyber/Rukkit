@@ -53,13 +53,16 @@ public class CommandManager
 	public void executeChatCommand(RoomConnection connection, String cmd) {
 		String[] cmds = cmd.split("\\s+", 2);
 		ChatCommand cmdObj = fetchCommand(cmds[0]);
-
-if (cmdObj == null) {
+		if (cmdObj == null) {
     connection.sendServerMessage(LangUtil.getString("chat.invalidCommand"));
     return;
 }
 
-boolean isAdmin = connection.player != null && connection.player.isAdmin;
+if (connection.player == null) {
+    return;
+}
+
+boolean isAdmin = connection.player.isAdmin;
 
 Boolean allowed;
 
@@ -69,7 +72,11 @@ if (isAdmin) {
     allowed = Rukkit.getConfig().playerPermissions.get(cmdObj.cmd);
 }
 
-if (allowed == null || !allowed) {
+if (allowed == null) {
+    allowed = !cmdObj.adminRequired || isAdmin;
+}
+
+if (!allowed) {
     connection.sendServerMessage(LangUtil.getString("chat.privDenied"));
     return;
 }
