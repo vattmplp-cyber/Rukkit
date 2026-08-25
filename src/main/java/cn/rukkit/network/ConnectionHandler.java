@@ -164,7 +164,6 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter {
 
 				// 检查房主
 				if (currentRoom.connectionManager.size() <= 0) {
-					conn.sendServerMessage(LangUtil.getString("rukkit.playerGotAdmin"));
 					conn.player.isAdmin = true;
 					ctx.writeAndFlush(Packet.serverInfo(currentRoom.config, true));
 				} else {
@@ -208,7 +207,6 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter {
 				} catch (Exception e) {
 					log.warn("Player {} data load failed!", playerName);
 				}
-				conn.sendServerMessage(LangUtil.getFormatString("rukkit.room", currentRoom.roomId));
 				conn.sendServerMessage(Rukkit.getConfig().welcomeMsg
 						.replace("{playerName}", playerName)
 						.replace("{simpleUUID}", uuid.substring(0, 7))
