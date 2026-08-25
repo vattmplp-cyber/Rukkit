@@ -1,0 +1,114 @@
+serverUser: RUKKIT
+welcomeMsg: "Welcome to Rukkit server, {playerName}!"
+serverMotd: "My Rukkit server"
+serverPort: 5123
+maxPlayer: 10
+maxRoom: 1
+minStartPlayer: 4
+pluginsPath: plugins
+mapsPath: maps
+modsPath: mods
+serverManagerEnabled: true
+serverManagerOpenConsole: true
+serverManagerRoot: servers
+serverManagerBasePort: 5200
+
+# Multi-server manager
+serverManagerMaxServers: 50
+serverManagerControlEnabled: true
+serverManagerControlPortOffset: 10000
+
+# Notification overrides. Leave a key out to keep the normal language file.
+# Placeholders: {serverName} {serverPort} {roomId} {playerName} {reason} {fileName}
+notifications:
+  rukkit.playerJoin: "Player {playerName} joined the server!"
+  rukkit.playerLeft: "Player {playerName} left the server ({reason})!"
+  rukkit.playerReconnect: "Player {playerName} reconnected!"
+  rukkit.playerSharingControlDueDisconnected: "Sharing control due to disconnected."
+  rukkit.gameFull: "Game is full!"
+  rukkit.gameStarted: "Started game on server: {serverName}"
+  rukkit.playerReady: "Player {playerName} is ready."
+  rukkit.playerRegister: ""
+  rukkit.room: ""
+  rukkit.playerGotAdmin: ""
+  rukkit.plugin.invalid: "Invalid Rukkit plugin: {fileName}"
+maxTeams: 2
+helpPageSize: 10
+helpShowDisabledCommands: false
+helpShowDescriptions: true
+allowedIncomeValues:
+  - 1.0
+  - 2.0
+  - 2.5
+  - 3.0
+allowedCreditsValues:
+  - 0
+  - 1000
+  - 2000
+  - 5000
+  - 10000
+  - 50000
+  - 100000
+  - 200000
+playerPermissions:
+  help: true
+  state: true
+  version: true
+  t: true
+  maps: true
+  map: false
+  cmaps: true
+  cmap: false
+  kick: false
+  team: true
+  self_team: true
+  move: true
+  self_move: true
+  qc: true
+  fog: false
+  nukes: false
+  startingunits: false
+  income: false
+  share: true
+  credits: false
+  start: false
+  sync: false
+  i: true
+  chksum: true
+  maping: true
+  list: true
+  surrender: true
+  afk: false
+  y: true
+  n: true
+adminPermissions:
+  help: true
+  state: false
+  version: false
+  t: true
+  maps: true
+  map: true
+  cmaps: false
+  cmap: true
+  kick: false
+  team: true
+  self_team: true
+  move: true
+  self_move: true
+  qc: true
+  fog: true
+  nukes: true
+  startingunits: false
+  income: false
+  share: false
+  credits: true
+  start: true
+  sync: true
+  i: true
+  chksum: true
+  maping: true
+  list: true
+  surrender: true
+  afk: true
+  y: true
+  n: true
