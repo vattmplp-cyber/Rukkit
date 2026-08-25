@@ -49,7 +49,10 @@ public class RukkitConfig extends BaseConfig
     public java.util.Map<String, Boolean> playerPermissions = new java.util.HashMap<>();
 	public java.util.Map<String, Boolean> adminPermissions = new java.util.HashMap<>();
 
-{
+	private void initDefaultPermissions() {
+    playerPermissions.clear();
+    adminPermissions.clear();
+
     playerPermissions.put("help", true);
     playerPermissions.put("state", true);
     playerPermissions.put("version", true);
@@ -82,6 +85,7 @@ public class RukkitConfig extends BaseConfig
     playerPermissions.put("n", true);
 
     adminPermissions.putAll(playerPermissions);
+
     adminPermissions.put("map", true);
     adminPermissions.put("cmap", true);
     adminPermissions.put("move", true);
@@ -91,7 +95,6 @@ public class RukkitConfig extends BaseConfig
     adminPermissions.put("start", true);
     adminPermissions.put("sync", true);
 
-    // Навмисно вимкнено для адміна:
     adminPermissions.put("state", false);
     adminPermissions.put("version", false);
     adminPermissions.put("cmaps", false);
@@ -103,6 +106,7 @@ public class RukkitConfig extends BaseConfig
 }
 	
 	public RukkitConfig() {
-		this.configName = "rukkit.yml";
+    this.configName = "rukkit.yml";
+    initDefaultPermissions();
 	}
 }
