@@ -223,15 +223,21 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 		}
 
 		private int parseRequestedTeam(int raw, int spawnIndex) {
-			int maxTeams = Math.max(1, Rukkit.getConfig().maxTeams);
-			if (raw == -1 || raw == -2) {
-				// Client auto-team hint: derive A/B from the requested spawn parity.
-				return Math.floorMod(spawnIndex, maxTeams);
-			}
-			// Client sends internal zero-based team IDs (0/1).
-			if (raw >= 0 && raw < maxTeams) return raw;
-			return -1;
-		}
+    int maxTeams = Math.max(1, Rukkit.getConfig().maxTeams);
+
+    if (raw == -1 || raw == -2) {
+        // The client is requesting a real spawn slot.
+        // Keep the requested spawn exactly as specified.
+        return Math.floorMod(spawnIndex, maxTeams);
+    }
+
+    // Client sends internal zero-based team IDs.
+    if (raw >= 0 && raw < maxTeams) {
+        return raw;
+    }
+
+    return -1;
+}
 
 		@Override
 		public boolean onSend(RoomConnection con, String[] cmd) {
@@ -251,12 +257,29 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 					if (fromPlayer == null || fromPlayer.isEmpty) return false;
 
 					if (cmd.length >= 3) {
-						int team = parseRequestedTeam(Integer.parseInt(cmd[2]), requestedSlot);
-						if (team < 0 || team >= Math.max(1, Rukkit.getConfig().maxTeams)) return false;
-						if (!playerGroup.movePlayerToTeam(fromPlayer, team)) {
-							return false;
-						}
-					} else {
+    int rawTeam = Integer.parseInt(cmd[2]);
+    int team = parseRequestedTeam(rawTeam, requestedSlot);
+
+    if (team < 0 || team >= Math.max(1, Rukkit.getConfig().maxTeams)) {
+        return false;
+    }
+
+    // The client gives an exact spawn slot.
+    NetworkPlayer targetPlayer = playerGroup.get(requestedSlot);
+
+    if (targetPlayer == null) {
+        return false;
+    }
+
+    // Do not silently replace an occupied spawn.
+    if (!targetPlayer.isEmpty && targetPlayer != fromPlayer) {
+        return false;
+    }
+
+    fromPlayer.team = team;
+    fromPlayer.playerIndex = requestedSlot;
+    playerGroup.set(requestedSlot, fromPlayer);
+} else {
 						// Without a team argument keep the original exact-slot admin move.
 						NetworkPlayer targetPlayer = playerGroup.get(requestedSlot);
 						if (targetPlayer == null || targetPlayer == fromPlayer) return false;
