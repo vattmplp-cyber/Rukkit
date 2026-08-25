@@ -47,7 +47,7 @@ public class RukkitConfig extends BaseConfig
 	public boolean checksumSync = false;
 
     public java.util.Map<String, Boolean> playerPermissions = new java.util.HashMap<>();
-public java.util.Map<String, Boolean> adminPermissions = new java.util.HashMap<>();
+	public java.util.Map<String, Boolean> adminPermissions = new java.util.HashMap<>();
 
 {
     playerPermissions.put("help", true);
