@@ -214,87 +214,101 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 
 	// TODO: -move && -self-move 操作
 	class MoveCallback implements ChatCommandListener {
-		private int type;
-		public MoveCallback(int type) {
-			this.type = type;
-		}
-		@Override
-		public boolean onSend(RoomConnection con, String[] cmd) {
-			switch (type) {
-					//move
-				case 0:
-					if (!con.player.isAdmin || con.currectRoom.isGaming() || cmd.length < 2) {
-						// Do nothing.
-					} else {
-						PlayerManager playerGroup = con.currectRoom.playerManager;
-						NetworkPlayer fromPlayer = playerGroup.get(Integer.parseInt(cmd[0]) - 1);
-						NetworkPlayer targetPlayer = playerGroup.get(Integer.parseInt(cmd[1]) - 1);
-						if (cmd.length == 3) {
-							int team = Integer.parseInt(cmd[2]);
-							if (team == -1 || team == -2)
-							{
-								if (targetPlayer.playerIndex % 2 == 1) {
-									fromPlayer.team = 1;
-								} else {
-									fromPlayer.team = 0;
-								}
-							} else {
-								fromPlayer.team = team;
-							}
-						}
-						try {
-							if (fromPlayer.movePlayer(Integer.parseInt(cmd[1]) - 1)) {
-								con.sendServerMessage(LangUtil.getString("chat.moveComplete"));
-							} else {
-								int fromslot, toslot;
-								fromslot = fromPlayer.playerIndex;
-								toslot = targetPlayer.playerIndex;
-								if (fromslot == toslot) {
-									con.sendServerMessage("not same player!");
-									break;
-								}
-								playerGroup.remove(targetPlayer);
-								fromPlayer.movePlayer(toslot);
-								targetPlayer.movePlayer(fromslot);
-							}
-						} catch (Exception e) {
-							//fromPlayer.movePlayer(Integer.parseInt(cmd[1]) - 1);
-							e.printStackTrace();
-						}
-					}
-					break;
-					// Self-move
-				case 1:
-					if (con.currectRoom.isGaming() || cmd.length < 1) {
-						// Do nothing.
-					} else {
-						try {
-							if (cmd.length == 2) {
-								int team = Integer.parseInt(cmd[1]);
-								if (team == -1 || team == -2)
-								{
-									if ((Integer.parseInt(cmd[0]) - 1) % 2 == 1) {
-										con.player.team = 1;
-									} else {
-										con.player.team = 0;
-									}
-								} else {
-									con.player.team = team;
-								}
-							}
-							if (con.player.movePlayer(Integer.parseInt(cmd[0]) - 1)) {
-								con.sendServerMessage(LangUtil.getString("chat.moveComplete"));
-							} else {
-								con.sendServerMessage(LangUtil.getString("chat.playerExist"));
-							}
-						} catch (Exception e) {
-							log.error("Error:", e);
-						}
-					}
-			}
-			return false;
-		}
-	}
+    private int type;
+
+    public MoveCallback(int type) {
+        this.type = type;
+    }
+
+    @Override
+    public boolean onSend(RoomConnection con, String[] cmd) {
+        switch (type) {
+            case 0:
+                // .move <player> <target> [team]
+                if (!con.player.isAdmin || con.currectRoom.isGaming() || cmd.length < 2) {
+                    return false;
+                }
+
+                try {
+                    PlayerManager playerGroup = con.currectRoom.playerManager;
+
+                    NetworkPlayer fromPlayer =
+                            playerGroup.get(Integer.parseInt(cmd[0]) - 1);
+
+                    NetworkPlayer targetPlayer =
+                            playerGroup.get(Integer.parseInt(cmd[1]) - 1);
+
+                    if (fromPlayer == null || targetPlayer == null) {
+                        return false;
+                    }
+
+                    if (cmd.length == 3) {
+                        int team = Integer.parseInt(cmd[2]);
+
+                        // Only Team A (1) or Team B (2)
+                        if (team != 1 && team != 2) {
+                            return false;
+                        }
+
+                        fromPlayer.team = team - 1;
+                    }
+
+                    if (fromPlayer.movePlayer(Integer.parseInt(cmd[1]) - 1)) {
+                        con.sendServerMessage(LangUtil.getString("chat.moveComplete"));
+                    } else {
+                        int fromslot = fromPlayer.playerIndex;
+                        int toslot = targetPlayer.playerIndex;
+
+                        if (fromslot == toslot) {
+                            con.sendServerMessage("not same player!");
+                            break;
+                        }
+
+                        playerGroup.remove(targetPlayer);
+                        fromPlayer.movePlayer(toslot);
+                        targetPlayer.movePlayer(fromslot);
+                    }
+
+                } catch (Exception e) {
+                    log.error("Error:", e);
+                }
+
+                break;
+
+            case 1:
+                // .self_move <target> [team]
+                if (con.currectRoom.isGaming() || cmd.length < 1) {
+                    return false;
+                }
+
+                try {
+                    if (cmd.length == 2) {
+                        int team = Integer.parseInt(cmd[1]);
+
+                        // Only Team A (1) or Team B (2)
+                        if (team != 1 && team != 2) {
+                            return false;
+                        }
+
+                        con.player.team = team - 1;
+                    }
+
+                    if (con.player.movePlayer(Integer.parseInt(cmd[0]) - 1)) {
+                        con.sendServerMessage(LangUtil.getString("chat.moveComplete"));
+                    } else {
+                        con.sendServerMessage(LangUtil.getString("chat.playerExist"));
+                    }
+
+                } catch (Exception e) {
+                    log.error("Error:", e);
+                }
+
+                break;
+        }
+
+        return false;
+    }
+}
 
 	// TODO: -qc 操作
 	class QcCallback implements ChatCommandListener {
@@ -313,41 +327,60 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 			this.type = type;
 		}
 		@Override
-		public boolean onSend(RoomConnection con, String[] args) {
-			switch (type) {
-					//team
-				case 0:
-					if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 2) {
-						// Do nothing.
-					} else {
-						try {
-							int team = (Integer.parseInt(args[1]) - 1);
-							int slot = Integer.parseInt(args[0]) - 1;
-							if (team == -1 || team == -2) {
-								if (slot % 2 == 1) {
-									con.currectRoom.playerManager
-											.get(slot).team = 1;
-								} else {
-									con.currectRoom.playerManager
-											.get(slot).team = 2;
-								}
-							}
-							con.currectRoom.playerManager
-								.get(slot).team = team;
-						} catch (NullPointerException e) {
-							con.sendServerMessage(LangUtil.getString("chat.playerEmpty"));
-						}
-					}
-					break;
-					//self-team
-				case 1:
-					if (args.length < 1) return false;
-					// Never got exceptions...
-					con.player.team = Integer.parseInt(args[0]) - 1;
+public boolean onSend(RoomConnection con, String[] args) {
+    if (args.length < 1) {
+        return false;
+    }
 
-			}
-			return false;
-		}
+    switch (type) {
+        case 0:
+            // .team <player> <team>
+            if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 2) {
+                return false;
+            }
+
+            try {
+                int team = Integer.parseInt(args[1]);
+
+                // Only Team A (1) or Team B (2)
+                if (team != 1 && team != 2) {
+                    return false;
+                }
+
+                int slot = Integer.parseInt(args[0]) - 1;
+
+                NetworkPlayer targetPlayer = con.currectRoom.playerManager.get(slot);
+                if (targetPlayer == null) {
+                    return false;
+                }
+
+                targetPlayer.team = team - 1;
+            } catch (Exception ignored) {
+                return false;
+            }
+
+            break;
+
+        case 1:
+            // .self_team <team>
+            try {
+                int team = Integer.parseInt(args[0]);
+
+                // Only Team A (1) or Team B (2)
+                if (team != 1 && team != 2) {
+                    return false;
+                }
+
+                con.player.team = team - 1;
+            } catch (Exception ignored) {
+                return false;
+            }
+
+            break;
+    }
+
+    return false;
+}
 	}
 
 	static class HelpCallback implements ChatCommandListener {
