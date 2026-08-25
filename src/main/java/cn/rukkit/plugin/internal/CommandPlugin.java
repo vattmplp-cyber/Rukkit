@@ -705,6 +705,23 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 	 }
 	 }*/
 
+	private boolean hasPermission(RoomConnection con, String command) {
+    if (con == null || con.player == null) {
+        return false;
+    }
+
+    boolean isAdmin = con.player.isAdmin;
+
+    Boolean allowed;
+
+    if (isAdmin) {
+        allowed = Rukkit.getConfig().adminPermissions.get(command);
+    } else {
+        allowed = Rukkit.getConfig().playerPermissions.get(command);
+    }
+
+    return allowed != null && allowed;
+}
 
 	@Override
 	public void onLoad() {
