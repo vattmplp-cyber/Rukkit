@@ -163,11 +163,7 @@ public class NetworkPlayer
 
 			stream.writeBoolean(true);
 
-			if(isAdmin){
-				stream.writeUTF("[[[" + name + "]]]");
-			}else{
-				stream.writeUTF(name);
-			}
+			stream.writeUTF(name);
 			stream.writeBoolean(true);
 
 			//enc.stream.writeBoolean(true);
