@@ -278,31 +278,83 @@ public final class ServerInstanceManager {
     }
 
     public List<String> resolveTargets(String target) {
-        if (target == null || target.trim().isEmpty()) return Collections.emptyList();
-        if ("selected".equalsIgnoreCase(target)) target = selectedTarget;
-        List<String> names = listNames();
-        if ("all".equalsIgnoreCase(target)) return names;
-        LinkedHashSet<String> result = new LinkedHashSet<>();
-        for (String token : target.split(",")) {
-            String t = token.trim();
-            if (t.isEmpty()) continue;
-            if (t.matches("\\d+-\\d+")) {
-                String[] parts = t.split("-");
-                int a = Integer.parseInt(parts[0]);
-                int b = Integer.parseInt(parts[1]);
-                if (a > b) { int tmp = a; a = b; b = tmp; }
-                for (int i = Math.max(1, a); i <= Math.min(names.size(), b); i++) result.add(names.get(i - 1));
-            } else if (t.matches("\\d+")) {
-                int idx = Integer.parseInt(t);
-                if (idx >= 1 && idx <= names.size()) result.add(names.get(idx - 1));
-                String byName = "server" + t;
-                if (new File(root(), byName).isDirectory()) result.add(byName);
-            } else if (new File(root(), sanitize(t)).isDirectory()) {
-                result.add(sanitize(t));
-            }
-        }
-        return new ArrayList<>(result);
+    if (target == null || target.trim().isEmpty()) {
+        return Collections.emptyList();
     }
+
+    if ("selected".equalsIgnoreCase(target)) {
+        target = selectedTarget;
+    }
+
+    List<String> names = listNames();
+
+    if ("all".equalsIgnoreCase(target)) {
+        return names;
+    }
+
+    LinkedHashSet<String> result = new LinkedHashSet<>();
+
+    for (String token : target.split(",")) {
+        String t = token.trim();
+
+        if (t.isEmpty()) {
+            continue;
+        }
+
+        // Range: 3-8
+        if (t.matches("\\d+-\\d+")) {
+            String[] parts = t.split("-");
+
+            int a = Integer.parseInt(parts[0]);
+            int b = Integer.parseInt(parts[1]);
+
+            if (a > b) {
+                int tmp = a;
+                a = b;
+                b = tmp;
+            }
+
+            for (String name : names) {
+                if (name.matches("\\d+")) {
+                    int serverNumber = Integer.parseInt(name);
+
+                    if (serverNumber >= a && serverNumber <= b) {
+                        result.add(name);
+                    }
+                }
+            }
+
+            continue;
+        }
+
+        // Exact numeric server name: "10"
+        if (t.matches("\\d+")) {
+            // FIRST: exact server name.
+            if (new File(root(), t).isDirectory()) {
+                result.add(t);
+                continue;
+            }
+
+            // Optional alias: server10
+            String byName = "server" + t;
+
+            if (new File(root(), byName).isDirectory()) {
+                result.add(byName);
+            }
+
+            continue;
+        }
+
+        // Normal server name: server2, ca1, test-server...
+        String safe = sanitize(t);
+
+        if (new File(root(), safe).isDirectory()) {
+            result.add(safe);
+        }
+    }
+
+    return new ArrayList<>(result);
+}
 
     public boolean isRunning(String name) {
         try {
