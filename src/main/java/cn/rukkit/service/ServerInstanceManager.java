@@ -353,7 +353,27 @@ public final class ServerInstanceManager {
 
     private File root() { return new File(Rukkit.getEnvPath(), Rukkit.getConfig().serverManagerRoot); }
     private File serverDir(String name) { return new File(root(), sanitize(name)); }
-    private String sharedPath(String path) { return new File(Rukkit.getEnvPath(), path).getAbsolutePath(); }
+    private String sharedPath(String path) {
+    if (path == null || path.isEmpty()) {
+        return path;
+    }
+
+    File target = new File(path);
+
+    // If the path is already absolute, convert it to a path
+    // relative to the Rukkit root so child servers can resolve it
+    // from their own server directory.
+    if (target.isAbsolute()) {
+        try {
+            File root = Rukkit.getEnvPath();
+            return root.toPath().relativize(target.toPath()).toString();
+        } catch (IllegalArgumentException e) {
+            return path;
+        }
+    }
+
+    return ".." + File.separator + path;
+}
 
     private RukkitConfig copyCurrentConfig(int port) {
         return copyConfig(Rukkit.getConfig(), port);
