@@ -73,7 +73,7 @@ if (isAdmin) {
 }
 
 if (allowed == null) {
-    allowed = !cmdObj.adminRequired || isAdmin;
+    allowed = cmdObj.adminRequired ? isAdmin : true;
 }
 
 if (!allowed) {
