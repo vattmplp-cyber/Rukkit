@@ -45,9 +45,9 @@ public final class ServerInstanceManager {
         cfg.serverManagerControlToken = UUID.randomUUID().toString();
         cfg.configName = "rukkit.yml";
         cfg.UUID = UUID.randomUUID().toString();
-        cfg.pluginsPath = sharedPath(Rukkit.getConfig().pluginsPath);
-        cfg.mapsPath = sharedPath(Rukkit.getConfig().mapsPath);
-        cfg.modsPath = sharedPath(Rukkit.getConfig().modsPath);
+        cfg.pluginsPath = sharedPath(dir, Rukkit.getConfig().pluginsPath);
+        cfg.mapsPath = sharedPath(dir, Rukkit.getConfig().mapsPath);
+        cfg.modsPath = sharedPath(dir, Rukkit.getConfig().modsPath);
 
         writeConfig(new File(dir, "rukkit.yml"), cfg);
         writeRoundConfig(new File(dir, "round.yml"), Rukkit.getRoundConfig());
@@ -353,27 +353,26 @@ public final class ServerInstanceManager {
 
     private File root() { return new File(Rukkit.getEnvPath(), Rukkit.getConfig().serverManagerRoot); }
     private File serverDir(String name) { return new File(root(), sanitize(name)); }
-    private String sharedPath(String path) {
+    private String sharedPath(File childDir, String path) {
     if (path == null || path.isEmpty()) {
         return path;
     }
 
     File target = new File(path);
 
-    // If the path is already absolute, convert it to a path
-    // relative to the Rukkit root so child servers can resolve it
-    // from their own server directory.
-    if (target.isAbsolute()) {
-        try {
-            File root = Rukkit.getEnvPath();
-            return root.toPath().relativize(target.toPath()).toString();
-        } catch (IllegalArgumentException e) {
-            return path;
-        }
+    if (!target.isAbsolute()) {
+        target = new File(Rukkit.getEnvPath(), path);
     }
 
-    return ".." + File.separator + path;
+    try {
+        return childDir.toPath()
+                .relativize(target.toPath())
+                .toString();
+    } catch (IllegalArgumentException e) {
+        return target.getAbsolutePath();
+    }
 }
+
 
     private RukkitConfig copyCurrentConfig(int port) {
         return copyConfig(Rukkit.getConfig(), port);
@@ -392,7 +391,9 @@ public final class ServerInstanceManager {
         dst.playerPermissions = new HashMap<>(src.playerPermissions); dst.adminPermissions = new HashMap<>(src.adminPermissions);
         dst.allowedIncomeValues = new ArrayList<>(src.allowedIncomeValues); dst.allowedCreditsValues = new ArrayList<>(src.allowedCreditsValues);
         dst.notifications = new LinkedHashMap<>(src.notifications);
-        dst.pluginsPath = sharedPath(src.pluginsPath); dst.mapsPath = sharedPath(src.mapsPath); dst.modsPath = sharedPath(src.modsPath);
+        dst.pluginsPath = sharedPath(dir, src.pluginsPath);
+        dst.mapsPath = sharedPath(dir, src.mapsPath);
+        dst.modsPath = sharedPath(dir, src.modsPath);
         dst.serverManagerMaxServers = src.serverManagerMaxServers; dst.serverManagerControlEnabled = src.serverManagerControlEnabled;
         dst.serverManagerControlPortOffset = src.serverManagerControlPortOffset; dst.serverManagerOpenConsole = src.serverManagerOpenConsole;
         dst.serverManagerBasePort = src.serverManagerBasePort;
