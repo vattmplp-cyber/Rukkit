@@ -391,9 +391,9 @@ public final class ServerInstanceManager {
         dst.playerPermissions = new HashMap<>(src.playerPermissions); dst.adminPermissions = new HashMap<>(src.adminPermissions);
         dst.allowedIncomeValues = new ArrayList<>(src.allowedIncomeValues); dst.allowedCreditsValues = new ArrayList<>(src.allowedCreditsValues);
         dst.notifications = new LinkedHashMap<>(src.notifications);
-        dst.pluginsPath = sharedPath(dir, src.pluginsPath);
-        dst.mapsPath = sharedPath(dir, src.mapsPath);
-        dst.modsPath = sharedPath(dir, src.modsPath);
+        dst.pluginsPath = src.pluginsPath;
+        dst.mapsPath = src.mapsPath;
+        dst.modsPath = src.modsPath;
         dst.serverManagerMaxServers = src.serverManagerMaxServers; dst.serverManagerControlEnabled = src.serverManagerControlEnabled;
         dst.serverManagerControlPortOffset = src.serverManagerControlPortOffset; dst.serverManagerOpenConsole = src.serverManagerOpenConsole;
         dst.serverManagerBasePort = src.serverManagerBasePort;
