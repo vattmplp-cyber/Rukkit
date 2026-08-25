@@ -559,21 +559,34 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 
 	class IncomeCallback implements ChatCommandListener {
 		@Override
-		public boolean onSend(RoomConnection con, String[] args) {
-			if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 1) {
-				// Do nothing.
-			} else {
-				Rukkit.getRoundConfig().income = Float.parseFloat(args[0]);
-				if (Rukkit.getRoundConfig().income > 100 || Rukkit.getRoundConfig().income < 0) {
-					Rukkit.getRoundConfig().income = 1;
-				}
-				try {
-					con.currectRoom.broadcast(Packet.serverInfo(con.currectRoom.config));
-					con.handler.ctx.writeAndFlush(Packet.serverInfo(con.currectRoom.config, true));
-				} catch (IOException ignored) {}
-			}
-			return false;
-		}
+public boolean onSend(RoomConnection con, String[] args) {
+    if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 1) {
+        return false;
+    }
+
+    float income;
+
+    try {
+        income = Float.parseFloat(args[0]);
+    } catch (NumberFormatException e) {
+        con.sendServerMessage("Allowed income values: 1, 2, 2.5, 3");
+        return false;
+    }
+
+    if (income != 1.0f && income != 2.0f && income != 2.5f && income != 3.0f) {
+        con.sendServerMessage("Allowed income values: 1, 2, 2.5, 3");
+        return false;
+    }
+
+    Rukkit.getRoundConfig().income = income;
+
+    try {
+        con.currectRoom.broadcast(Packet.serverInfo(con.currectRoom.config));
+        con.handler.ctx.writeAndFlush(Packet.serverInfo(con.currectRoom.config, true));
+    } catch (IOException ignored) {}
+
+    return false;
+}
 	}
 
 	class CreditsCallback implements ChatCommandListener {
