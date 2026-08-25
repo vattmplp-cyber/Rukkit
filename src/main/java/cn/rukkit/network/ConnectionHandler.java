@@ -88,10 +88,9 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter {
 		GameInputStream in = new GameInputStream(p);
 		switch (p.type) {
 			case Packet.PACKET_PREREGISTER_CONNECTION:
-				log.debug("New connection established:{}", ctx.channel().remoteAddress());
-				ctx.write(p.preRegister());
-				ctx.writeAndFlush(p.chat("SERVER", LangUtil.getString("rukkit.playerRegister"), -1));
-				break;
+    log.debug("New connection established:{}", ctx.channel().remoteAddress());
+    ctx.writeAndFlush(p.preRegister());
+    break;
 			case Packet.PACKET_PLAYER_INFO:
 				String packageName = in.readString();
 				log.debug("Ints:" + in.readInt());
