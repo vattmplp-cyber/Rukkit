@@ -45,6 +45,62 @@ public class RukkitConfig extends BaseConfig
 	public boolean useCommandQuere = false;
 
 	public boolean checksumSync = false;
+
+    public java.util.Map<String, Boolean> playerPermissions = new java.util.HashMap<>();
+public java.util.Map<String, Boolean> adminPermissions = new java.util.HashMap<>();
+
+{
+    playerPermissions.put("help", true);
+    playerPermissions.put("state", true);
+    playerPermissions.put("version", true);
+    playerPermissions.put("t", true);
+    playerPermissions.put("maps", true);
+    playerPermissions.put("map", false);
+    playerPermissions.put("cmaps", true);
+    playerPermissions.put("cmap", false);
+    playerPermissions.put("kick", false);
+    playerPermissions.put("team", true);
+    playerPermissions.put("self_team", true);
+    playerPermissions.put("move", false);
+    playerPermissions.put("self_move", true);
+    playerPermissions.put("qc", false);
+    playerPermissions.put("fog", false);
+    playerPermissions.put("nukes", false);
+    playerPermissions.put("startingunits", false);
+    playerPermissions.put("income", false);
+    playerPermissions.put("share", true);
+    playerPermissions.put("credits", false);
+    playerPermissions.put("start", false);
+    playerPermissions.put("sync", false);
+    playerPermissions.put("i", true);
+    playerPermissions.put("chksum", true);
+    playerPermissions.put("maping", true);
+    playerPermissions.put("list", true);
+    playerPermissions.put("surrender", true);
+    playerPermissions.put("afk", false);
+    playerPermissions.put("y", true);
+    playerPermissions.put("n", true);
+
+    adminPermissions.putAll(playerPermissions);
+    adminPermissions.put("map", true);
+    adminPermissions.put("cmap", true);
+    adminPermissions.put("move", true);
+    adminPermissions.put("fog", true);
+    adminPermissions.put("nukes", true);
+    adminPermissions.put("credits", true);
+    adminPermissions.put("start", true);
+    adminPermissions.put("sync", true);
+
+    // Навмисно вимкнено для адміна:
+    adminPermissions.put("state", false);
+    adminPermissions.put("version", false);
+    adminPermissions.put("cmaps", false);
+    adminPermissions.put("kick", false);
+    adminPermissions.put("qc", false);
+    adminPermissions.put("startingunits", false);
+    adminPermissions.put("income", false);
+    adminPermissions.put("share", false);
+}
 	
 	public RukkitConfig() {
 		this.configName = "rukkit.yml";
