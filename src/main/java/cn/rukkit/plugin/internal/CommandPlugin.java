@@ -705,7 +705,7 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 	 }
 	 }*/
 
-	private boolean hasPermission(RoomConnection con, String command) {
+	private static boolean hasPermission(RoomConnection con, String command) {
     if (con == null || con.player == null) {
         return false;
     }
