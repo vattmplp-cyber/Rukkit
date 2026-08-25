@@ -351,30 +351,79 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 	}
 
 	static class HelpCallback implements ChatCommandListener {
-		@Override
-		public boolean onSend(RoomConnection con, String[] args) {
-			// TODO: Implement this method
-			StringBuilder build = new StringBuilder();
-			if (args.length > 0) {
-				build.append("- Help -  Page " + args[0] + " \n");
-				int page = Integer.valueOf(args[0]) - 1;
-				for (int i = page * 10;i < Rukkit.getCommandManager().getLoadedCommand().entrySet().size();i++) {
-					if (i > page * 10 + 10) break;
-					ChatCommand cmd = (ChatCommand) ((Map.Entry) Rukkit.getCommandManager().getLoadedCommand().entrySet().toArray()[i]).getValue();
-					build.append(String.format("%s : %s", cmd.cmd, cmd.helpMessage) + "\n");
-				}
-			} else {
-				build.append("- Help -  Page 1 \n");
-				for (int i = 0;i < Rukkit.getCommandManager().getLoadedCommand().entrySet().size();i++) {
-					if (i > 10) break;
-					ChatCommand cmd = (ChatCommand) ((Map.Entry) Rukkit.getCommandManager().getLoadedCommand().entrySet().toArray()[i]).getValue();
-					build.append(String.format("%s : %s", cmd.cmd, cmd.helpMessage) + "\n");
-				}
-			}
-			con.sendServerMessage(build.toString());
-			return false;
-		}
-	}
+
+    @Override
+    public boolean onSend(RoomConnection con, String[] args) {
+        List<ChatCommand> availableCommands = new ArrayList<>();
+
+        for (Object value : Rukkit.getCommandManager()
+                .getLoadedCommand()
+                .values()) {
+
+            ChatCommand cmd = (ChatCommand) value;
+
+            boolean allowed = hasPermission(con, cmd.cmd);
+
+            if (allowed || Rukkit.getConfig().helpShowDisabledCommands) {
+                availableCommands.add(cmd);
+            }
+        }
+
+        int pageSize = Rukkit.getConfig().helpPageSize;
+        if (pageSize < 1) {
+            pageSize = 10;
+        }
+
+        int page = 1;
+        if (args.length > 0) {
+            try {
+                page = Integer.parseInt(args[0]);
+            } catch (NumberFormatException ignored) {
+                page = 1;
+            }
+        }
+
+        if (page < 1) {
+            page = 1;
+        }
+
+        int totalPages = Math.max(
+                1,
+                (availableCommands.size() + pageSize - 1) / pageSize
+        );
+
+        if (page > totalPages) {
+            page = totalPages;
+        }
+
+        StringBuilder build = new StringBuilder();
+        build.append("- Help - Page ")
+                .append(page)
+                .append("/")
+                .append(totalPages)
+                .append("\n");
+
+        int start = (page - 1) * pageSize;
+        int end = Math.min(start + pageSize, availableCommands.size());
+
+        for (int i = start; i < end; i++) {
+            ChatCommand cmd = availableCommands.get(i);
+
+            build.append("-")
+                    .append(cmd.cmd);
+
+            if (Rukkit.getConfig().helpShowDescriptions) {
+                build.append(" : ")
+                        .append(cmd.helpMessage);
+            }
+
+            build.append("\n");
+        }
+
+        con.sendServerMessage(build.toString());
+        return false;
+    }
+}
 
 	class InfoCallback implements ChatCommandListener {
 		@Override
