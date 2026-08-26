@@ -45,7 +45,7 @@ public class NetworkRoom {
     private boolean isGaming = false;
     private boolean isPaused = false;
     private ScheduledFuture gameTaskFuture;
-    private ScheduledFuture gameStartCountdownFuture;
+    private ScheduledFuture<?> gameStartCountdownFuture;
     private volatile boolean gameStartCountdownRunning = false;
     private final AtomicInteger gameStartCountdownRemaining = new AtomicInteger(0);
     private SaveManager saveManager;
@@ -319,13 +319,6 @@ public class NetworkRoom {
      */
     public void stopGame(boolean isRuturn) {
 
-        if (gameStartCountdownFuture != null) {
-            Rukkit.getThreadManager().shutdownTask(gameStartCountdownFuture);
-            gameStartCountdownFuture = null;
-        }
-        gameStartCountdownRunning = false;
-        gameStartCountdownRemaining.set(0);
-
         // Reset ticktime and checksum
         currentStep = 0;
         checkSumFrame = 0;
@@ -384,9 +377,7 @@ public class NetworkRoom {
     }
 
     /**
-     * Starts a round game. When the configurable countdown is enabled, players
-     * receive SERVER chat announcements such as "Game Starting 5..." through
-     * "Game Starting 1..." before the actual game packets are sent.
+     * starts a round game.
      */
     public synchronized void startGame() {
         if (isGaming || gameStartCountdownRunning) {
@@ -403,7 +394,6 @@ public class NetworkRoom {
 
         gameStartCountdownRunning = true;
         gameStartCountdownRemaining.set(countdown);
-
         broadcastGameStarting(countdown);
 
         gameStartCountdownFuture = Rukkit.getThreadManager().schedule(new Runnable() {
@@ -420,21 +410,13 @@ public class NetworkRoom {
                     startGameNow();
                     return;
                 }
-
                 broadcastGameStarting(left);
             }
         }, 1000, 1000);
     }
 
     private void broadcastGameStarting(int seconds) {
-        connectionManager.broadcastServerMessage(Rukkit.getConfig().notification(
-                "rukkit.gameStarting",
-                "Game Starting {seconds}...",
-                "seconds", seconds,
-                "serverName", Rukkit.getConfig().serverUser,
-                "serverPort", Rukkit.getConfig().serverPort,
-                "roomId", roomId
-        ));
+        connectionManager.broadcastServerMessage("Game Starting " + seconds + "...");
     }
 
     private void startGameNow() {
