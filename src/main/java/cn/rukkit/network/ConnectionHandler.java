@@ -557,8 +557,7 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter {
 				}
 				break;
 			case Packet.PACKET_RANDY:
-				currentRoom.connectionManager.broadcastServerMessage(String.format("Player '%s' is randy.", conn.player.name));
-                break;
+    		break;
             case Packet.PACKET_SYNC:
                 in.readByte();
                 int frame = in.readInt();
