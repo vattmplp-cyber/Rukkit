@@ -150,7 +150,7 @@ public final class ServerInstanceManager {
             return "started in new console";
         }
 
-        Process process = new ProcessBuilder(javaBin, "-jar", jar.getAbsolutePath())
+        Process process = new ProcessBuilder(javaBin, "-Drukkit.instance=" + safeName, "-jar", jar.getAbsolutePath())
                 .directory(dir)
                 .redirectErrorStream(true)
                 .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
@@ -488,7 +488,7 @@ public final class ServerInstanceManager {
             out.println("title Rukkit - " + safeName);
             out.println("cd /d \"%~dp0\"");
             out.println("echo Starting Rukkit server '" + safeName + "'...");
-            out.println("\"" + javaBin + "\" -jar \"" + jar.getAbsolutePath() + "\"");
+            out.println("\"" + javaBin + "\" -Drukkit.instance=" + safeName + " -jar \"" + jar.getAbsolutePath() + "\"");
             out.println("echo.");
             out.println("echo Rukkit stopped. Press any key to close this window.");
             out.println("pause >nul");
