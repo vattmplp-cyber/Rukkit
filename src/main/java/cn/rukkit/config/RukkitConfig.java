@@ -22,6 +22,8 @@ public class RukkitConfig extends BaseConfig
 	public int maxPlayer = 10;
 	public int maxRoom = 5;
 	public int minStartPlayer = 4;
+	public boolean gameStartCountdownEnabled = true;
+	public int gameStartCountdownSeconds = 5;
     public boolean syncEnabled = true;
 	public boolean singlePlayerMode = false;
 	public boolean isDebug = true;
