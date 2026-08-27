@@ -164,11 +164,12 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter {
 
 				// 检查房主
 				if (currentRoom.connectionManager.size() <= 0) {
-					conn.player.isAdmin = true;
-					ctx.writeAndFlush(Packet.serverInfo(currentRoom.config, true));
-				} else {
-					ctx.writeAndFlush(Packet.serverInfo(currentRoom.config));
-				}
+  		  conn.player.isAdmin = true;
+  		  ctx.writeAndFlush(Packet.serverInfo(currentRoom.config, true));
+   		 conn.sendServerMessage("'" + conn.player.name + "' is now in control of this server");
+		} else {
+		    ctx.writeAndFlush(Packet.serverInfo(currentRoom.config));
+		}
 
 				// 当前房间是否在游戏
 				if (currentRoom.isGaming()) {
