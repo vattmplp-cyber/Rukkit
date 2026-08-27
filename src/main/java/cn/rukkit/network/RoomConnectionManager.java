@@ -18,6 +18,7 @@ import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.ChannelGroupFuture;
 import io.netty.channel.group.ChannelMatcher;
 import io.netty.channel.group.DefaultChannelGroup;
+import io.netty.channel.Channel;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,23 +85,50 @@ public class RoomConnectionManager {
      *
      * @params connection Connection to discard.
      */
-    public boolean discard(RoomConnection connection) {
-        connection.handler.ctx.disconnect();
-        connections.remove(connection);
-        playerManager.remove(connection.player);
-        // Check privs.
-        if (connection.player.isAdmin && playerManager.getPlayerCount() > 0) {
-            for (NetworkPlayer p : playerManager.getPlayerArray()) {
-                if (!p.isEmpty) {
-                    p.isAdmin = true;
-                    try {
-                        p.getConnection().handler.ctx.writeAndFlush(Packet.serverInfo(room.config, true));
-                    } catch (IOException ignored) {}
-                    break;
+    public synchronized boolean discard(RoomConnection connection) {
+        if (connection == null) return false;
+
+        Channel channel = null;
+        if (connection.handler != null && connection.handler.ctx != null) {
+            channel = connection.handler.ctx.channel();
+        }
+
+        boolean removedConnection = connections.remove(connection);
+        boolean removedChannel = channel != null && CHANNEL_GROUP.remove(channel);
+
+        // Make discard idempotent. channelInactive() can race with explicit cleanup.
+        if (!removedConnection && !removedChannel) {
+            return false;
+        }
+
+        if (channel != null && channel.isActive()) {
+            try {
+                channel.disconnect();
+            } catch (RuntimeException ignored) {}
+        }
+
+        NetworkPlayer removedPlayer = connection.player;
+        if (removedPlayer != null) {
+            boolean wasAdmin = removedPlayer.isAdmin;
+            removedPlayer.isAdmin = false;
+            removedPlayer.isAfk = false;
+            playerManager.remove(removedPlayer);
+
+            // Transfer administrator control exactly once to the first remaining player.
+            if (wasAdmin && playerManager.getPlayerCount() > 0) {
+                for (NetworkPlayer p : playerManager.getPlayerArray()) {
+                    if (!p.isEmpty && p.getConnection() != null) {
+                        p.isAdmin = true;
+                        try {
+                            p.getConnection().handler.ctx.writeAndFlush(Packet.serverInfo(room.config, true));
+                        } catch (IOException | RuntimeException ignored) {}
+                        break;
+                    }
                 }
             }
         }
-        return CHANNEL_GROUP.remove(connection.handler.ctx.channel());
+
+        return true;
     }
 
     /**
