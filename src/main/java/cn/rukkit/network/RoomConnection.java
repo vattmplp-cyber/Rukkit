@@ -116,7 +116,7 @@ public class RoomConnection {
 		lastPongTime = now;
 		pingTime = 0L;
 		int intervalSeconds = Math.max(1, Rukkit.getConfig().playerPingIntervalSeconds);
-		long intervalMs = intervalSeconds * 1000L;
+		int intervalMs = intervalSeconds * 1000;
 		pingFuture = Rukkit.getThreadManager().schedule(new PingTasker(), intervalMs, intervalMs);
 	}
 	
