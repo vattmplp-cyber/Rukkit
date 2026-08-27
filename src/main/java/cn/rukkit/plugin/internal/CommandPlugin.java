@@ -882,7 +882,7 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 				requester.updateServerInfo();
 				String msg = Rukkit.getConfig().notification(
 						"rukkit.afk.transferred",
-						"'{adminName}' is AFK, control switched to: '{newAdminName}'.",
+						"'{adminName}' is AFK, control switched to: '{newAdminName}'",
 						"adminName", admin.name,
 						"newAdminName", requester.name);
 				room.connectionManager.broadcastServerMessage(msg);
