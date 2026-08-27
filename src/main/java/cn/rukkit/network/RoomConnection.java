@@ -20,12 +20,18 @@ import java.io.IOError;
 import java.io.IOException;
 import java.util.Random;
 import java.util.concurrent.ScheduledFuture;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class RoomConnection {
+	private static final Logger log = LoggerFactory.getLogger(RoomConnection.class);
+
 	public NetworkPlayer player;
 	public ConnectionHandler handler;
 	public NetworkRoom currectRoom;
-	public long pingTime;
+	public volatile long pingTime;
+	/** Timestamp of the most recent heartbeat response received from this client. */
+	private volatile long lastPongTime;
 	public int lastSyncTick = 0;
 	public boolean checkSumSent = false;
 	public int numberOfDesyncError = 0;
@@ -42,16 +48,37 @@ public class RoomConnection {
 	public class PingTasker implements Runnable {
 		@Override
 		public void run() {
-			// TODO: Implement this method
 			try {
+				if (handler == null || handler.ctx == null || !handler.ctx.channel().isActive()) {
+					stopPingTask();
+					return;
+				}
+
+				long now = System.currentTimeMillis();
+				if (Rukkit.getConfig().playerConnectionWatchdogEnabled
+						&& lastPongTime > 0L
+						&& now - lastPongTime > Math.max(1, Rukkit.getConfig().playerConnectionTimeoutSeconds) * 1000L) {
+					long staleMs = now - lastPongTime;
+					log.warn("Closing stale player connection: player={}, uuid={}, no heartbeat response for {} ms",
+							player == null ? "<unknown>" : player.name,
+							player == null ? "<unknown>" : player.uuid,
+							staleMs);
+					stopPingTask();
+					handler.ctx.close();
+					return;
+				}
+
 				GameOutputStream o = new GameOutputStream();
 				o.writeLong(new Random().nextLong());
 				o.writeByte(0);
 				Packet p = o.createPacket(108);
 				handler.ctx.writeAndFlush(p);
-				pingTime = System.currentTimeMillis();
-			} catch (IOException e) {
+				pingTime = now;
+			} catch (IOException | RuntimeException e) {
 				stopPingTask();
+				try {
+					if (handler != null && handler.ctx != null) handler.ctx.close();
+				} catch (RuntimeException ignored) {}
 			}
 		}
 	}
@@ -85,7 +112,12 @@ public class RoomConnection {
 	
 	public void startPingTask() {
 		if (pingFuture != null) return;
-		pingFuture = Rukkit.getThreadManager().schedule(new PingTasker(), 2000, 2000);
+		long now = System.currentTimeMillis();
+		lastPongTime = now;
+		pingTime = 0L;
+		int intervalSeconds = Math.max(1, Rukkit.getConfig().playerPingIntervalSeconds);
+		long intervalMs = intervalSeconds * 1000L;
+		pingFuture = Rukkit.getThreadManager().schedule(new PingTasker(), intervalMs, intervalMs);
 	}
 	
 	public void startTeamTask() {
@@ -237,6 +269,10 @@ public class RoomConnection {
 	 * 心跳包返回
 	 */
 	public void pong() {
-		player.ping = (int) (System.currentTimeMillis() - pingTime);
+		long now = System.currentTimeMillis();
+		if (pingTime > 0L) {
+			player.ping = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, now - pingTime));
+		}
+		lastPongTime = now;
 	}
 }
