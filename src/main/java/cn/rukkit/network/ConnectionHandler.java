@@ -164,10 +164,9 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter {
 
 				// 检查房主
 				if (currentRoom.connectionManager.size() <= 0) {
-  		  conn.player.isAdmin = true;
-  		  ctx.writeAndFlush(Packet.serverInfo(currentRoom.config, true));
-   		 conn.sendServerMessage("'" + conn.player.name + "' is now in control of this server");
-		} else {
+  			  conn.player.isAdmin = true;
+   			 ctx.writeAndFlush(Packet.serverInfo(currentRoom.config, true));
+			} else {
 		    ctx.writeAndFlush(Packet.serverInfo(currentRoom.config));
 		}
 
@@ -215,12 +214,16 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter {
 						.replace("{versionCode}", String.valueOf(gameVersionCode)));
 
 				if (targetPlayer == null) {
-					conn.startPingTask();
-					conn.startTeamTask();
-					conn.updateTeamList(false);
-					stopTimeout();
-					PlayerJoinEvent.getListenerList().callListeners(new PlayerJoinEvent(conn.player));
-				}
+  			  conn.startPingTask();
+  			  conn.startTeamTask();
+  			  conn.updateTeamList(false);
+  			  stopTimeout();
+  			  PlayerJoinEvent.getListenerList().callListeners(new PlayerJoinEvent(conn.player));
+
+ 		   if (conn.player.isAdmin) {
+  		      conn.sendServerMessage("'" + conn.player.name + "' is now in control of this server");
+ 		   }
+		}
 
 				break;
 			case Packet.PACKET_HEART_BEAT_RESPONSE:
