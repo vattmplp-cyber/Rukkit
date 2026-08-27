@@ -22,6 +22,8 @@ import cn.rukkit.network.*;
 import cn.rukkit.*;
 import cn.rukkit.network.packet.*;
 import java.io.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 
 public class CommandManager 
 {
@@ -30,6 +32,7 @@ public class CommandManager
 	private HashMap<String, ServerCommand> loadedServerCommand = new HashMap<String, ServerCommand>();
 
 	private List<String> serverCmdString = new ArrayList<>();
+	private final List<Consumer<RoomConnection>> adminActivityListeners = new CopyOnWriteArrayList<>();
 	
 	public void registerCommand(ChatCommand cmd) {
 		log.debug(String.format("Registering Command '%s' from plugin '%s'...",cmd.cmd,cmd.getFromPlugin().config.name));
@@ -50,45 +53,63 @@ public class CommandManager
 		}
 	}
 	
+
+	/** Register a listener that is notified when an admin performs a command/action. */
+	public void registerAdminCommandActivityListener(Consumer<RoomConnection> listener) {
+		if (listener != null && !adminActivityListeners.contains(listener)) {
+			adminActivityListeners.add(listener);
+		}
+	}
+
+	/** Notify listeners about an administrator action. Safe to call from packet handlers. */
+	public void notifyAdminActivity(RoomConnection connection) {
+		if (connection == null || connection.player == null || !connection.player.isAdmin) return;
+		for (Consumer<RoomConnection> listener : adminActivityListeners) {
+			try {
+				listener.accept(connection);
+			} catch (RuntimeException e) {
+				log.warn("Admin activity listener failed", e);
+			}
+		}
+	}
+
 	public void executeChatCommand(RoomConnection connection, String cmd) {
 		String[] cmds = cmd.split("\\s+", 2);
 		ChatCommand cmdObj = fetchCommand(cmds[0]);
 		if (cmdObj == null) {
-    connection.sendServerMessage(LangUtil.getString("chat.invalidCommand"));
-    return;
-}
+			connection.sendServerMessage(LangUtil.getString("chat.invalidCommand"));
+			return;
+		}
 
-if (connection.player == null) {
-    return;
-}
+		// Commands can be received during the connection setup. Do not emit
+		// permission errors before a NetworkPlayer exists.
+		if (connection.player == null) {
+			return;
+		}
 
-boolean isAdmin = connection.player.isAdmin;
+		boolean isAdmin = connection.player.isAdmin;
+		Boolean allowed = isAdmin
+				? Rukkit.getConfig().adminPermissions.get(cmdObj.cmd)
+				: Rukkit.getConfig().playerPermissions.get(cmdObj.cmd);
 
-Boolean allowed;
+		// Missing entries preserve the original Rukkit adminRequired behavior.
+		if (allowed == null) {
+			allowed = cmdObj.adminRequired ? isAdmin : true;
+		}
 
-if (isAdmin) {
-    allowed = Rukkit.getConfig().adminPermissions.get(cmdObj.cmd);
-} else {
-    allowed = Rukkit.getConfig().playerPermissions.get(cmdObj.cmd);
-}
+		if (!allowed) {
+			log.debug("Permission denied: command={}, player={}, admin={}",
+					cmdObj.cmd, connection.player.name, isAdmin);
+			connection.sendServerMessage(LangUtil.getString("chat.privDenied"));
+			return;
+		}
 
-if (allowed == null) {
-    allowed = cmdObj.adminRequired ? isAdmin : true;
-}
+		// Any admin chat-command activity cancels a running .afk countdown.
+		// .afk itself is intentionally excluded because it starts the countdown.
+		if (isAdmin && !"afk".equalsIgnoreCase(cmdObj.cmd)) {
+			notifyAdminActivity(connection);
+		}
 
-if (!allowed) {
-    log.warn(
-        "Permission denied: command={}, player={}, isAdmin={}, adminPermission={}, playerPermission={}",
-        cmdObj.cmd,
-        connection.player != null ? connection.player.name : "<null>",
-        isAdmin,
-        Rukkit.getConfig().adminPermissions.get(cmdObj.cmd),
-        Rukkit.getConfig().playerPermissions.get(cmdObj.cmd)
-    );
-
-    connection.sendServerMessage(LangUtil.getString("chat.privDenied"));
-    return;
-}
 		boolean result;
 		log.trace("cmd is:" + cmds[0]);
 		if (cmds.length > 1 && cmdObj.args > 0) {
@@ -108,36 +129,22 @@ if (!allowed) {
 	}
 
 	public void executeServerCommand(String cmd) {
-		String trimmed = cmd == null ? "" : cmd.trim();
-		if (trimmed.isEmpty()) return;
-
-		String[] cmds = trimmed.split("\\s+");
+		String[] cmds = cmd.split("\\s+", 2);
 		ServerCommand cmdObj = fetchServerCommand(cmds[0]);
 		if (cmdObj == null) {
 			System.out.println("Command not exist.Try 'help' to list all commands.");
 			return;
 		}
 		log.trace("cmd is:" + cmds[0]);
-
-		// The multi-server manager needs the complete command line, not a fixed
-		// argument count.
-		if ("server".equalsIgnoreCase(cmdObj.cmd)) {
-			String[] args = new String[Math.max(0, cmds.length - 1)];
-			if (args.length > 0) System.arraycopy(cmds, 1, args, 0, args.length);
-			cmdObj.getListener().onSend(args);
-			return;
-		}
-
 		if (cmds.length > 1 && cmdObj.args > 0) {
-			int argCount = Math.min(cmdObj.args, cmds.length - 1);
-			String[] args = new String[argCount];
-			System.arraycopy(cmds, 1, args, 0, argCount);
+			String[] args = cmds[1].split(" ", cmdObj.args);
 			cmdObj.getListener().onSend(args);
 		} else {
 			cmdObj.getListener().onSend(new String[0]);
 		}
 	}
 
+	
 	public ChatCommand fetchCommand(String cmd){
 		return loadedCommand.getOrDefault(cmd, null);
 	}
