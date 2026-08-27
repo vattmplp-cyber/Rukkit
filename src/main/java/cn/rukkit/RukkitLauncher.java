@@ -28,6 +28,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class RukkitLauncher extends ConsoleAppender<ILoggingEvent>
 {
@@ -40,6 +42,11 @@ public class RukkitLauncher extends ConsoleAppender<ILoggingEvent>
 	public static ServerCommandCompleter serverCommandCompleter = new ServerCommandCompleter();
 
 	private static Logger log = LoggerFactory.getLogger("Launcher");
+	
+	// Черга для логів щоб уникнути конфліктів з рядком введення
+	private static final Queue<String> logQueue = new ConcurrentLinkedQueue<>();
+	private static final Object logLock = new Object();
+
 	public static void main(String args[]){
 		InternalLoggerFactory.setDefaultFactory(new Slf4JLoggerFactory());
 		try {
@@ -49,6 +56,10 @@ public class RukkitLauncher extends ConsoleAppender<ILoggingEvent>
 					serverCommandCompleter,
 					NullCompleter.INSTANCE
 			)).build();
+			
+			// Запускаємо фоновий потік для обробки логів
+			startLogProcessor();
+			
 			Rukkit.startServer();
 			while (isTerminalRunning) {
 				try {
@@ -82,6 +93,32 @@ public class RukkitLauncher extends ConsoleAppender<ILoggingEvent>
 			//e.printStackTrace();
 		}
 	}
+	
+	/**
+	 * Запускає фоновий потік для обробки логів без блокування рядка введення
+	 */
+	private static void startLogProcessor() {
+		Thread logProcessorThread = new Thread(() -> {
+			while (isTerminalRunning) {
+				try {
+					if (!logQueue.isEmpty()) {
+						String logMessage = logQueue.poll();
+						if (logMessage != null) {
+							synchronized (logLock) {
+								lineReader.printAbove(logMessage);
+							}
+						}
+					}
+					Thread.sleep(10); // Мала затримка щоб не гарячити CPU
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					break;
+				}
+			}
+		}, "LogProcessor");
+		logProcessorThread.setDaemon(true);
+		logProcessorThread.start();
+	}
 
 	Layout<ILoggingEvent> layout = new TTLLLayout();
 
@@ -102,13 +139,9 @@ public class RukkitLauncher extends ConsoleAppender<ILoggingEvent>
 
 	@Override
 	protected void subAppend(ILoggingEvent event) {
-		// Синхронізація для запобігання конфлікту між потоками при виводі логів
-		synchronized (lineReader) {
-			// Виводимо логи вище рядка введення
-			lineReader.printAbove(new String(encoder.encode(event)));
-			// Перерисовуємо рядок введення щоб він залишився видимим
-			lineReader.getTerminal().writer().flush();
-		}
+		// Додаємо лог у чергу замість прямого виведення
+		String logMessage = new String(encoder.encode(event));
+		logQueue.offer(logMessage);
 	}
 
 }
