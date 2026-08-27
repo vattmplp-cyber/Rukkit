@@ -102,7 +102,13 @@ public class RukkitLauncher extends ConsoleAppender<ILoggingEvent>
 
 	@Override
 	protected void subAppend(ILoggingEvent event) {
-		lineReader.printAbove(new String(encoder.encode(event)));
+		// Синхронізація для запобігання конфлікту між потоками при виводі логів
+		synchronized (lineReader) {
+			// Виводимо логи вище рядка введення
+			lineReader.printAbove(new String(encoder.encode(event)));
+			// Перерисовуємо рядок введення щоб він залишився видимим
+			lineReader.getTerminal().writer().flush();
+		}
 	}
 
 }
