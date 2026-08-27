@@ -41,6 +41,20 @@ public class RukkitConfig extends BaseConfig
 	
 	//Ping packet receive timeout.default = 8000 (ms)
 	public int pingTimeout = 8000;
+
+	// Connected-player heartbeat watchdog. The client must keep answering Ping(108).
+	public boolean playerConnectionWatchdogEnabled = true;
+	public int playerConnectionTimeoutSeconds = 15;
+	public int playerPingIntervalSeconds = 2;
+
+	// Lobby administrator AFK takeover.
+	public boolean afkEnabled = true;
+	public int afkCountdownSeconds = 30;
+	public int afkWarningIntervalSeconds = 10;
+	public int afkFinalWarningSeconds = 5;
+	public boolean afkCancelOnAdminChat = true;
+	public boolean afkCancelOnAdminCommand = true;
+	public boolean afkTransferControl = true;
 	
 	//registerTimeout default = 5 (s)
 	public int registerTimeout = 5;
@@ -110,7 +124,7 @@ public class RukkitConfig extends BaseConfig
 		m.put("maping", true);
 		m.put("list", true);
 		m.put("surrender", true);
-		m.put("afk", false);
+		m.put("afk", true);
 		m.put("y", true);
 		m.put("n", true);
 		return m;
@@ -178,6 +192,11 @@ public class RukkitConfig extends BaseConfig
 		if (serverManagerControlPortOffset < 1) serverManagerControlPortOffset = 10000;
 		if (serverManagerControlPort < 1 || serverManagerControlPort > 65535) serverManagerControlPort = serverPort + serverManagerControlPortOffset;
 		if (serverManagerControlToken == null || serverManagerControlToken.trim().isEmpty()) serverManagerControlToken = java.util.UUID.randomUUID().toString();
+		if (playerConnectionTimeoutSeconds < 1) playerConnectionTimeoutSeconds = 15;
+		if (playerPingIntervalSeconds < 1) playerPingIntervalSeconds = 2;
+		if (afkCountdownSeconds < 1) afkCountdownSeconds = 30;
+		if (afkWarningIntervalSeconds < 1) afkWarningIntervalSeconds = 10;
+		if (afkFinalWarningSeconds < 1) afkFinalWarningSeconds = 5;
 		if (notifications == null) notifications = new LinkedHashMap<>();
 		setNotificationDefault("rukkit.playerJoin", "Player {playerName} joined the server!");
 		setNotificationDefault("rukkit.playerLeft", "Player {playerName} left the server({reason})!");
@@ -185,6 +204,11 @@ public class RukkitConfig extends BaseConfig
 		setNotificationDefault("rukkit.playerSharingControlDueDisconnected", "Player {playerName} shared control because of disconnect.");
 		setNotificationDefault("rukkit.gameFull", "Game is full!");
 		setNotificationDefault("rukkit.gameStarted", "Started game on server: {serverName}");
+		setNotificationDefault("rukkit.gameStarting", "Game Starting {seconds}...");
+		setNotificationDefault("rukkit.afk.start", "AFK timer started.\n'{adminName}' has {seconds} seconds to send a chat message or perform an admin action.");
+		setNotificationDefault("rukkit.afk.warning", "'{adminName}' has {seconds} seconds to send a chat message or perform an admin action.");
+		setNotificationDefault("rukkit.afk.cancelled", "Countdown stopped!");
+		setNotificationDefault("rukkit.afk.transferred", "'{adminName}' is AFK, control switched to: '{newAdminName}'.");
 		if (helpHiddenCommands == null) helpHiddenCommands = new java.util.ArrayList<>();
 		if (!helpHiddenCommands.contains("qc")) helpHiddenCommands.add("qc");
 	}
