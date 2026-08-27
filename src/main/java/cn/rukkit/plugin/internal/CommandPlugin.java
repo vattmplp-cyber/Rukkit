@@ -36,11 +36,27 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandListener {
+
+	private final Map<NetworkRoom, AfkSession> afkSessions = new ConcurrentHashMap<>();
+
+	private static final class AfkSession {
+		final NetworkPlayer admin;
+		final NetworkPlayer requester;
+		volatile int remainingSeconds;
+		volatile ScheduledFuture<?> future;
+
+		AfkSession(NetworkPlayer admin, NetworkPlayer requester, int remainingSeconds) {
+			this.admin = admin;
+			this.requester = requester;
+			this.remainingSeconds = remainingSeconds;
+		}
+	}
 
 	int totalInfo = 0;
 	Logger log = LoggerFactory.getLogger(CommandPlugin.class);
@@ -48,10 +64,13 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 	public class CommandEventListener implements EventListener {
 		@EventHandler
 		public void playerChat(PlayerChatEvent e) {
-			log.debug("admin = {}, voteId = {}", e.getPlayer().isAdmin, e.getPlayer().getRoom().vote.voteId);
-			if (e.getPlayer().isAdmin && e.getPlayer().getRoom().vote.voteId.equals("afk")) {
-				e.getPlayer().getRoom().connectionManager.broadcastServerMessage("Countdown stopped!");
-				e.getPlayer().getRoom().vote.stopVote();
+			if (e.getPlayer() == null || !e.getPlayer().isAdmin) return;
+			if (Rukkit.getConfig().afkCancelOnAdminChat) {
+				stopAfkCountdown(e.getPlayer().getRoom(),
+						Rukkit.getConfig().notification(
+							"rukkit.afk.cancelled",
+							"Countdown stopped!",
+							"adminName", e.getPlayer().name));
 			}
 		}
 	}
@@ -212,107 +231,85 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 	}
 
 
-	// Move players between spawn slots. When a team is supplied, the exact
-	// spawn requested by the client is treated only as a team hint; the server
-	// chooses any free spawn in that team.
+	// TODO: -move && -self-move 操作
 	class MoveCallback implements ChatCommandListener {
 		private int type;
-
 		public MoveCallback(int type) {
 			this.type = type;
 		}
-
-		private int parseRequestedTeam(int raw, int spawnIndex) {
-    int maxTeams = Math.max(1, Rukkit.getConfig().maxTeams);
-
-    if (raw == -1 || raw == -2) {
-        // The client is requesting a real spawn slot.
-        // Keep the requested spawn exactly as specified.
-        return Math.floorMod(spawnIndex, maxTeams);
-    }
-
-    // Client sends internal zero-based team IDs.
-    if (raw >= 0 && raw < maxTeams) {
-        return raw;
-    }
-
-    return -1;
-}
-
 		@Override
 		public boolean onSend(RoomConnection con, String[] cmd) {
-			if (con.player == null || con.currectRoom.isGaming()) return false;
-			try {
-				PlayerManager playerGroup = con.currectRoom.playerManager;
-
-				if (type == 0) {
-					// .move <fromSlot> <requestedSlot> [team]
-					if (!con.player.isAdmin || cmd.length < 2) return false;
-					int fromSlot = Integer.parseInt(cmd[0]) - 1;
-					int requestedSlot = Integer.parseInt(cmd[1]) - 1;
-					if (fromSlot < 0 || fromSlot >= Rukkit.getConfig().maxPlayer ||
-							requestedSlot < 0 || requestedSlot >= Rukkit.getConfig().maxPlayer) return false;
-
-					NetworkPlayer fromPlayer = playerGroup.get(fromSlot);
-					if (fromPlayer == null || fromPlayer.isEmpty) return false;
-
-					if (cmd.length >= 3) {
-    int rawTeam = Integer.parseInt(cmd[2]);
-    int team = parseRequestedTeam(rawTeam, requestedSlot);
-
-    if (team < 0 || team >= Math.max(1, Rukkit.getConfig().maxTeams)) {
-        return false;
-    }
-
-    // The client gives an exact spawn slot.
-    NetworkPlayer targetPlayer = playerGroup.get(requestedSlot);
-
-    if (targetPlayer == null) {
-        return false;
-    }
-
-    // Do not silently replace an occupied spawn.
-    if (!targetPlayer.isEmpty && targetPlayer != fromPlayer) {
-        return false;
-    }
-
-    fromPlayer.team = team;
-    fromPlayer.playerIndex = requestedSlot;
-    playerGroup.set(requestedSlot, fromPlayer);
-} else {
-						// Without a team argument keep the original exact-slot admin move.
-						NetworkPlayer targetPlayer = playerGroup.get(requestedSlot);
-						if (targetPlayer == null || targetPlayer == fromPlayer) return false;
-						if (targetPlayer.isEmpty) {
-							if (!fromPlayer.movePlayer(requestedSlot)) return false;
-						} else {
-							playerGroup.set(fromSlot, targetPlayer);
-							playerGroup.set(requestedSlot, fromPlayer);
-							fromPlayer.playerIndex = requestedSlot;
-							targetPlayer.playerIndex = fromSlot;
-						}
-					}
-					con.sendServerMessage(LangUtil.getString("chat.moveComplete"));
-				} else {
-					// .self_move <requestedSlot> [team]
-					if (cmd.length < 1) return false;
-					int requestedSlot = Integer.parseInt(cmd[0]) - 1;
-					if (requestedSlot < 0 || requestedSlot >= Rukkit.getConfig().maxPlayer) return false;
-
-					if (cmd.length >= 2) {
-						int team = parseRequestedTeam(Integer.parseInt(cmd[1]), requestedSlot);
-						if (team < 0 || team >= Math.max(1, Rukkit.getConfig().maxTeams)) return false;
-						if (!playerGroup.movePlayerToTeam(con.player, team)) return false;
+			switch (type) {
+					//move
+				case 0:
+					if (!con.player.isAdmin || con.currectRoom.isGaming() || cmd.length < 2) {
+						// Do nothing.
 					} else {
-						if (!con.player.movePlayer(requestedSlot)) {
-							con.sendServerMessage(LangUtil.getString("chat.playerExist"));
-							return false;
+						PlayerManager playerGroup = con.currectRoom.playerManager;
+						NetworkPlayer fromPlayer = playerGroup.get(Integer.parseInt(cmd[0]) - 1);
+						NetworkPlayer targetPlayer = playerGroup.get(Integer.parseInt(cmd[1]) - 1);
+						if (cmd.length == 3) {
+							int team = Integer.parseInt(cmd[2]);
+							if (team == -1 || team == -2)
+							{
+								if (targetPlayer.playerIndex % 2 == 1) {
+									fromPlayer.team = 1;
+								} else {
+									fromPlayer.team = 0;
+								}
+							} else {
+								fromPlayer.team = team;
+							}
+						}
+						try {
+							if (fromPlayer.movePlayer(Integer.parseInt(cmd[1]) - 1)) {
+								con.sendServerMessage(LangUtil.getString("chat.moveComplete"));
+							} else {
+								int fromslot, toslot;
+								fromslot = fromPlayer.playerIndex;
+								toslot = targetPlayer.playerIndex;
+								if (fromslot == toslot) {
+									con.sendServerMessage("not same player!");
+									break;
+								}
+								playerGroup.remove(targetPlayer);
+								fromPlayer.movePlayer(toslot);
+								targetPlayer.movePlayer(fromslot);
+							}
+						} catch (Exception e) {
+							//fromPlayer.movePlayer(Integer.parseInt(cmd[1]) - 1);
+							e.printStackTrace();
 						}
 					}
-					con.sendServerMessage(LangUtil.getString("chat.moveComplete"));
-				}
-			} catch (Exception e) {
-				log.debug("Move command rejected: {}", e.toString());
+					break;
+					// Self-move
+				case 1:
+					if (con.currectRoom.isGaming() || cmd.length < 1) {
+						// Do nothing.
+					} else {
+						try {
+							if (cmd.length == 2) {
+								int team = Integer.parseInt(cmd[1]);
+								if (team == -1 || team == -2)
+								{
+									if ((Integer.parseInt(cmd[0]) - 1) % 2 == 1) {
+										con.player.team = 1;
+									} else {
+										con.player.team = 0;
+									}
+								} else {
+									con.player.team = team;
+								}
+							}
+							if (con.player.movePlayer(Integer.parseInt(cmd[0]) - 1)) {
+								con.sendServerMessage(LangUtil.getString("chat.moveComplete"));
+							} else {
+								con.sendServerMessage(LangUtil.getString("chat.playerExist"));
+							}
+						} catch (Exception e) {
+							log.error("Error:", e);
+						}
+					}
 			}
 			return false;
 		}
@@ -331,33 +328,42 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 
 	class TeamCallback implements ChatCommandListener {
 		private int type;
-		public TeamCallback(int type) { this.type = type; }
-
+		public TeamCallback(int type) {
+			this.type = type;
+		}
 		@Override
 		public boolean onSend(RoomConnection con, String[] args) {
-			if (con.player == null || args.length < 1) return false;
-			try {
-				int team;
-				if (type == 0) {
-					// .team <player> <team> -- admin selects A/B, server chooses any free spawn in that team.
-					if (!con.player.isAdmin || con.currectRoom.isGaming() || args.length < 2) return false;
-					int slot = Integer.parseInt(args[0]) - 1;
-					team = Integer.parseInt(args[1]);
-					if (team < 1 || team > Math.max(1, Rukkit.getConfig().maxTeams)) return false;
-					NetworkPlayer target = con.currectRoom.playerManager.get(slot);
-					if (target == null || target.isEmpty) return false;
-					if (!con.currectRoom.playerManager.movePlayerToTeam(target, team - 1)) return false;
-				} else {
-					// .self_team <team> -- server chooses any free spawn in that team.
-					team = Integer.parseInt(args[0]);
-					if (team < 1 || team > Math.max(1, Rukkit.getConfig().maxTeams)) return false;
-					if (!con.currectRoom.playerManager.movePlayerToTeam(con.player, team - 1)) return false;
-				}
-				try {
-					con.updateTeamList(false);
-				} catch (IOException ignored) {}
-			} catch (Exception e) {
-				return false;
+			switch (type) {
+					//team
+				case 0:
+					if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 2) {
+						// Do nothing.
+					} else {
+						try {
+							int team = (Integer.parseInt(args[1]) - 1);
+							int slot = Integer.parseInt(args[0]) - 1;
+							if (team == -1 || team == -2) {
+								if (slot % 2 == 1) {
+									con.currectRoom.playerManager
+											.get(slot).team = 1;
+								} else {
+									con.currectRoom.playerManager
+											.get(slot).team = 2;
+								}
+							}
+							con.currectRoom.playerManager
+								.get(slot).team = team;
+						} catch (NullPointerException e) {
+							con.sendServerMessage(LangUtil.getString("chat.playerEmpty"));
+						}
+					}
+					break;
+					//self-team
+				case 1:
+					if (args.length < 1) return false;
+					// Never got exceptions...
+					con.player.team = Integer.parseInt(args[0]) - 1;
+
 			}
 			return false;
 		}
@@ -374,7 +380,6 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
                 .values()) {
 
             ChatCommand cmd = (ChatCommand) value;
-            if ("qc".equals(cmd.cmd)) continue;
 
             boolean allowed = hasPermission(con, cmd.cmd);
 
@@ -574,14 +579,18 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 	class IncomeCallback implements ChatCommandListener {
 		@Override
 		public boolean onSend(RoomConnection con, String[] args) {
-			if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 1) return false;
-			try {
-				float income = Float.parseFloat(args[0]);
-				if (!Rukkit.getConfig().allowedIncomeValues.contains(income)) return false;
-				Rukkit.getRoundConfig().income = income;
-				con.currectRoom.broadcast(Packet.serverInfo(con.currectRoom.config));
-				con.handler.ctx.writeAndFlush(Packet.serverInfo(con.currectRoom.config, true));
-			} catch (Exception ignored) {}
+			if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 1) {
+				// Do nothing.
+			} else {
+				Rukkit.getRoundConfig().income = Float.parseFloat(args[0]);
+				if (Rukkit.getRoundConfig().income > 100 || Rukkit.getRoundConfig().income < 0) {
+					Rukkit.getRoundConfig().income = 1;
+				}
+				try {
+					con.currectRoom.broadcast(Packet.serverInfo(con.currectRoom.config));
+					con.handler.ctx.writeAndFlush(Packet.serverInfo(con.currectRoom.config, true));
+				} catch (IOException ignored) {}
+			}
 			return false;
 		}
 	}
@@ -589,14 +598,15 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 	class CreditsCallback implements ChatCommandListener {
 		@Override
 		public boolean onSend(RoomConnection con, String[] args) {
-			if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 1) return false;
-			try {
-				int credits = Integer.parseInt(args[0]);
-				if (!Rukkit.getConfig().allowedCreditsValues.contains(credits)) return false;
-				Rukkit.getRoundConfig().credits = credits;
-				con.currectRoom.broadcast(Packet.serverInfo(con.currectRoom.config));
-				con.handler.ctx.writeAndFlush(Packet.serverInfo(con.currectRoom.config, true));
-			} catch (Exception ignored) {}
+			if (con.currectRoom.isGaming() || !con.player.isAdmin || args.length < 1) {
+				// Do nothing.
+			} else {
+				Rukkit.getRoundConfig().credits = Integer.parseInt(args[0]);
+				try {
+					con.currectRoom.broadcast(Packet.serverInfo(con.currectRoom.config));
+					con.handler.ctx.writeAndFlush(Packet.serverInfo(con.currectRoom.config, true));
+				} catch (IOException ignored) {}
+			}
 			return false;
 		}
 	}
@@ -740,20 +750,172 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 	static class AfkCallback implements ChatCommandListener {
 		@Override
 		public boolean onSend(RoomConnection con, String[] args) {
-			if (con.player == con.currectRoom.playerManager.getAdmin()) return false;
-			con.currectRoom.vote.disabledVote = true;
-			con.currectRoom.vote.submitVoting(new Runnable() {
-				@Override
-				public void run() {
-					NetworkPlayer forePlayer = con.currectRoom.playerManager.getAdmin();
-					NetworkPlayer currPlayer = con.player;
-					forePlayer.giveAdmin(currPlayer.playerIndex);
-					forePlayer.updateServerInfo();
-					currPlayer.updateServerInfo();
-				}
-			}, "afk", LangUtil.getFormatString("chat.vote.afk", con.player.name), 30);
+			// The callback is static for compatibility with the existing command registration.
+			CommandPlugin plugin = activeInstance;
+			if (plugin == null) return false;
+			return plugin.startAfkCountdown(con);
+		}
+	}
+
+	private static volatile CommandPlugin activeInstance;
+
+	private boolean startAfkCountdown(RoomConnection con) {
+		if (!Rukkit.getConfig().afkEnabled) {
+			con.sendServerMessage("AFK control is disabled on this server.");
 			return false;
 		}
+
+		NetworkRoom room = con.currectRoom;
+		if (room == null || room.isGaming()) {
+			con.sendServerMessage("AFK control is available only in the lobby.");
+			return false;
+		}
+
+		NetworkPlayer admin = room.playerManager.getAdmin();
+		if (admin == null || admin.isEmpty) {
+			con.sendServerMessage("There is no active server administrator.");
+			return false;
+		}
+
+		if (con.player == admin) {
+			con.sendServerMessage("You are already in control of this server.");
+			return false;
+		}
+
+		if (con.player.isEmpty || con.player.getConnection() == null
+				|| con.player.getConnection().handler == null
+				|| con.player.getConnection().handler.ctx == null
+				|| !con.player.getConnection().handler.ctx.channel().isActive()) {
+			con.sendServerMessage("You must stay connected to request AFK control.");
+			return false;
+		}
+
+		if (afkSessions.containsKey(room)) {
+			con.sendServerMessage("An AFK countdown is already running.");
+			return false;
+		}
+
+		int countdown = Math.max(1, Rukkit.getConfig().afkCountdownSeconds);
+		AfkSession session = new AfkSession(admin, con.player, countdown);
+		AfkSession previous = afkSessions.putIfAbsent(room, session);
+		if (previous != null) {
+			con.sendServerMessage("An AFK countdown is already running.");
+			return false;
+		}
+
+		broadcastAfkStart(room, session);
+		session.future = Rukkit.getThreadManager().schedule(new Runnable() {
+			@Override
+			public void run() {
+				AfkSession current = afkSessions.get(room);
+				if (current != session) return;
+
+				NetworkPlayer currentAdmin = room.playerManager.getAdmin();
+				if (room.isGaming() || currentAdmin != session.admin || !isConnected(session.requester)) {
+					stopAfkSession(room, session, false,
+							"AFK countdown cancelled.");
+					return;
+				}
+
+				int left = --session.remainingSeconds;
+				if (left <= 0) {
+					finishAfkCountdown(room, session);
+				} else if (shouldAnnounceAfk(left, countdown)) {
+					broadcastAfkWarning(room, session, left);
+				}
+			}
+		}, 1000, 1000);
+
+		return false;
+	}
+
+	private boolean isConnected(NetworkPlayer player) {
+		return player != null && !player.isEmpty && player.getConnection() != null
+				&& player.getConnection().handler != null
+				&& player.getConnection().handler.ctx != null
+				&& player.getConnection().handler.ctx.channel().isActive();
+	}
+
+	private boolean shouldAnnounceAfk(int seconds, int total) {
+		int interval = Math.max(1, Rukkit.getConfig().afkWarningIntervalSeconds);
+		int finalSeconds = Math.max(1, Rukkit.getConfig().afkFinalWarningSeconds);
+		return seconds == total || seconds % interval == 0 || seconds <= finalSeconds;
+	}
+
+	private void broadcastAfkStart(NetworkRoom room, AfkSession session) {
+		String msg = Rukkit.getConfig().notification(
+				"rukkit.afk.start",
+				"AFK timer started.\n'{adminName}' has {seconds} seconds to send a chat message or perform an admin action.",
+				"adminName", session.admin.name,
+				"seconds", session.remainingSeconds,
+				"requesterName", session.requester.name);
+		room.connectionManager.broadcastServerMessage(msg);
+	}
+
+	private void broadcastAfkWarning(NetworkRoom room, AfkSession session, int seconds) {
+		String msg = Rukkit.getConfig().notification(
+				"rukkit.afk.warning",
+				"'{adminName}' has {seconds} seconds to send a chat message or perform an admin action.",
+				"adminName", session.admin.name,
+				"seconds", seconds);
+		room.connectionManager.broadcastServerMessage(msg);
+	}
+
+	private void finishAfkCountdown(NetworkRoom room, AfkSession session) {
+		if (!afkSessions.remove(room, session)) return;
+		if (session.future != null) {
+			Rukkit.getThreadManager().shutdownTask(session.future);
+			session.future = null;
+		}
+
+		NetworkPlayer admin = room.playerManager.getAdmin();
+		NetworkPlayer requester = session.requester;
+		if (room.isGaming() || admin != session.admin || !isConnected(requester)) {
+			return;
+		}
+
+		if (Rukkit.getConfig().afkTransferControl) {
+			if (admin.giveAdmin(requester.playerIndex)) {
+				admin.isAfk = true;
+				requester.isAfk = false;
+				admin.updateServerInfo();
+				requester.updateServerInfo();
+				String msg = Rukkit.getConfig().notification(
+						"rukkit.afk.transferred",
+						"'{adminName}' is AFK, control switched to: '{newAdminName}'.",
+						"adminName", admin.name,
+						"newAdminName", requester.name);
+				room.connectionManager.broadcastServerMessage(msg);
+			}
+		}
+	}
+
+	private boolean stopAfkCountdown(NetworkRoom room, String message) {
+		AfkSession session = afkSessions.remove(room);
+		if (session == null) return false;
+		if (session.future != null) {
+			Rukkit.getThreadManager().shutdownTask(session.future);
+			session.future = null;
+		}
+		if (message != null && !message.isEmpty()) room.connectionManager.broadcastServerMessage(message);
+		return true;
+	}
+
+	private void stopAfkSession(NetworkRoom room, AfkSession session, boolean announce, String message) {
+		if (!afkSessions.remove(room, session)) return;
+		if (session.future != null) {
+			Rukkit.getThreadManager().shutdownTask(session.future);
+			session.future = null;
+		}
+		if (announce && message != null) room.connectionManager.broadcastServerMessage(message);
+	}
+
+	private void onAdminCommandActivity(RoomConnection con) {
+		if (!Rukkit.getConfig().afkCancelOnAdminCommand) return;
+		stopAfkCountdown(con.currectRoom, Rukkit.getConfig().notification(
+				"rukkit.afk.cancelled",
+				"Countdown stopped!",
+				"adminName", con.player.name));
 	}
 
 	/*class InfoCallback implements ChatCommandListener {
@@ -785,7 +947,9 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 	public void onLoad() {
 		// TODO: Implement this method
 		getLogger().info("CommandPlugin::onLoad()");
+		activeInstance = this;
 		CommandManager mgr = Rukkit.getCommandManager();
+		mgr.registerAdminCommandActivityListener(this::onAdminCommandActivity);
 		mgr.registerCommand(new ChatCommand("help", LangUtil.getString("chat.help"), 1, new HelpCallback(), this));
 		mgr.registerCommand(new ChatCommand("state", LangUtil.getString("chat.state"), 0, new StateCallback(), this));
 		mgr.registerCommand(new ChatCommand("version", LangUtil.getString("chat.version"), 0, this, this));
@@ -828,7 +992,10 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 
 	@Override
 	public void onDisable() {
-		// TODO: Implement this method
+		for (NetworkRoom room : new ArrayList<>(afkSessions.keySet())) {
+			stopAfkCountdown(room, null);
+		}
+		if (activeInstance == this) activeInstance = null;
 	}
 
 	@Override
