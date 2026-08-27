@@ -150,7 +150,7 @@ public final class ServerInstanceManager {
             return "started in new console";
         }
 
-        Process process = new ProcessBuilder(javaBin, "-Drukkit.instance=" + safeName, "-jar", jar.getAbsolutePath())
+        Process process = new ProcessBuilder(javaBin, "-jar", jar.getAbsolutePath())
                 .directory(dir)
                 .redirectErrorStream(true)
                 .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
@@ -434,6 +434,14 @@ public final class ServerInstanceManager {
         RukkitConfig dst = new RukkitConfig();
         dst.serverUser = src.serverUser; dst.welcomeMsg = src.welcomeMsg; dst.serverMotd = src.serverMotd;
         dst.serverPort = port; dst.maxPlayer = src.maxPlayer; dst.maxRoom = src.maxRoom; dst.minStartPlayer = src.minStartPlayer;
+        dst.gameStartCountdownEnabled = src.gameStartCountdownEnabled; dst.gameStartCountdownSeconds = src.gameStartCountdownSeconds;
+        dst.playerConnectionWatchdogEnabled = src.playerConnectionWatchdogEnabled;
+        dst.playerConnectionTimeoutSeconds = src.playerConnectionTimeoutSeconds;
+        dst.playerPingIntervalSeconds = src.playerPingIntervalSeconds;
+        dst.afkEnabled = src.afkEnabled; dst.afkCountdownSeconds = src.afkCountdownSeconds;
+        dst.afkWarningIntervalSeconds = src.afkWarningIntervalSeconds; dst.afkFinalWarningSeconds = src.afkFinalWarningSeconds;
+        dst.afkCancelOnAdminChat = src.afkCancelOnAdminChat; dst.afkCancelOnAdminCommand = src.afkCancelOnAdminCommand;
+        dst.afkTransferControl = src.afkTransferControl;
         dst.syncEnabled = src.syncEnabled; dst.singlePlayerMode = src.singlePlayerMode; dst.isDebug = src.isDebug; dst.onlineMode = src.onlineMode;
         dst.logPath = src.logPath; dst.maxPacketFrame = src.maxPacketFrame; dst.lang = src.lang; dst.threadPoolCount = src.threadPoolCount;
         dst.maxUnitsPerPlayer = src.maxUnitsPerPlayer; dst.pingTimeout = src.pingTimeout; dst.registerTimeout = src.registerTimeout;
@@ -488,7 +496,7 @@ public final class ServerInstanceManager {
             out.println("title Rukkit - " + safeName);
             out.println("cd /d \"%~dp0\"");
             out.println("echo Starting Rukkit server '" + safeName + "'...");
-            out.println("\"" + javaBin + "\" -Drukkit.instance=" + safeName + " -jar \"" + jar.getAbsolutePath() + "\"");
+            out.println("\"" + javaBin + "\" -jar \"" + jar.getAbsolutePath() + "\"");
             out.println("echo.");
             out.println("echo Rukkit stopped. Press any key to close this window.");
             out.println("pause >nul");
