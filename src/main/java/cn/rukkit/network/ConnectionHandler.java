@@ -236,6 +236,9 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter {
 				}
 				break;
 			case Packet.PACKET_ADD_GAMECOMMAND:
+				if (conn != null && conn.player != null && conn.player.isAdmin) {
+					Rukkit.getCommandManager().notifyAdminActivity(conn);
+				}
 				GameCommand cmd = new GameCommand();
 				cmd.arr = in.getDecodeBytes();
 				//conn.sendGameCommand(cmd);
@@ -610,6 +613,9 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter {
 				ctx.disconnect();
 				break;
 			case Packet.PACKET_QUESTION_RESPONCE:
+				if (conn != null && conn.player != null && conn.player.isAdmin) {
+					Rukkit.getCommandManager().notifyAdminActivity(conn);
+				}
 				in.readByte(); //Always 1;
 				int qid = in.readInt();
 				String response = in.readString();
@@ -620,7 +626,7 @@ public class ConnectionHandler extends ChannelInboundHandlerAdapter {
 
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-		//super.exceptionCaught(ctx, cause)
+		//super.channelRead(ctx, msg);
 		log.warn("Exception happened", cause);
 	}
 
