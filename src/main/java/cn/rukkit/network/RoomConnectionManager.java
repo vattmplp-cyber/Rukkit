@@ -46,12 +46,14 @@ public class RoomConnectionManager {
         connections.add(connection);
         playerManager.addWithTeam(connection.player);
         CHANNEL_GROUP.add(connection.handler.ctx.channel());
+        room.playerCountChanged();
     }
 
     public void set(RoomConnection connection, int index) {
         connections.add(connection);
         playerManager.set(index, connection.player);
         CHANNEL_GROUP.add(connection.handler.ctx.channel());
+        room.playerCountChanged();
     }
 
     /**
@@ -128,6 +130,7 @@ public class RoomConnectionManager {
             }
         }
 
+        room.playerCountChanged();
         return true;
     }
 

@@ -51,6 +51,9 @@ public class NetworkRoom {
     private final AtomicInteger gameEndGraceRemaining = new AtomicInteger(0);
     private volatile boolean gameStartCountdownRunning = false;
     private final AtomicInteger gameStartCountdownRemaining = new AtomicInteger(0);
+    private ScheduledFuture<?> autoStartForceFuture;
+    private final AtomicInteger autoStartForceRemaining = new AtomicInteger(0);
+    private volatile boolean autoStartForceBlocked = false;
     private SaveManager saveManager;
 
     public Vote vote;
@@ -347,6 +350,76 @@ public class NetworkRoom {
         if (isPaused) setPaused(false);
     }
 
+    private boolean hasOpposingTeams() {
+        Integer firstTeam = null;
+        for (RoomConnection connection : connectionManager.getConnections()) {
+            if (connection == null || connection.player == null || connection.player.isEmpty) continue;
+            if (firstTeam == null) {
+                firstTeam = connection.player.team;
+            } else if (connection.player.team != firstTeam) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private synchronized void startAutoStartForceCountdown() {
+        if (autoStartForceFuture != null && !autoStartForceFuture.isDone()) return;
+
+        final int minPlayers = Math.max(1, Rukkit.getConfig().minStartPlayer);
+        if (Rukkit.getConfig().singlePlayerMode || connectionManager.size() < minPlayers || isGaming || gameStartCountdownRunning) return;
+
+        autoStartForceBlocked = false;
+        autoStartForceRemaining.set(120);
+        connectionManager.broadcastServerMessage(minPlayers + "+ players, game will force start in 2 mins or type .start");
+
+        autoStartForceFuture = Rukkit.getThreadManager().scheduleAtFixedRate(new Runnable() {
+            @Override
+            public void run() {
+                if (isGaming || Rukkit.getConfig().singlePlayerMode || connectionManager.size() < minPlayers || gameStartCountdownRunning) {
+                    cancelAutoStartForceCountdown();
+                    return;
+                }
+
+                int left = autoStartForceRemaining.decrementAndGet();
+                if (left == 60) {
+                    connectionManager.broadcastServerMessage(minPlayers + "+ players, game will force start in 1 min.");
+                } else if (left == 30 || left == 20 || left == 10 || left == 5) {
+                    connectionManager.broadcastServerMessage(minPlayers + "+ players, game will force start in " + left + " seconds.");
+                }
+
+                if (left <= 0) {
+                    if (hasOpposingTeams()) {
+                        cancelAutoStartForceCountdown();
+                        startGameNow();
+                    } else if (!autoStartForceBlocked) {
+                        autoStartForceBlocked = true;
+                        connectionManager.broadcastServerMessage("Game cannot start: no opposing team.");
+                    }
+                }
+            }
+        }, 1000, 1000, TimeUnit.MILLISECONDS);
+    }
+
+    private synchronized void cancelAutoStartForceCountdown() {
+        if (autoStartForceFuture != null) {
+            Rukkit.getThreadManager().shutdownTask(autoStartForceFuture);
+            autoStartForceFuture = null;
+        }
+        autoStartForceRemaining.set(0);
+        autoStartForceBlocked = false;
+    }
+
+    public synchronized void playerCountChanged() {
+        RukkitConfig cfg = Rukkit.getConfig();
+        int minPlayers = Math.max(1, cfg.minStartPlayer);
+        if (cfg.singlePlayerMode || isGaming || gameStartCountdownRunning || connectionManager.size() < minPlayers) {
+            cancelAutoStartForceCountdown();
+            return;
+        }
+        startAutoStartForceCountdown();
+    }
+
     public boolean isPaused() {
         return isPaused;
     }
@@ -394,6 +467,7 @@ public class NetworkRoom {
         gameTaskFuture.cancel(true);
         isGaming = false;
         RoomStopGameEvent.getListenerList().callListeners(new RoomStopGameEvent(this));
+        playerCountChanged();
         //Rukkit.getThreadManager().shutdown();
     }
 
@@ -439,6 +513,13 @@ public class NetworkRoom {
             return;
         }
 
+        if (!hasOpposingTeams()) {
+            connectionManager.broadcastServerMessage("Game cannot start: no opposing team.");
+            playerCountChanged();
+            return;
+        }
+        cancelAutoStartForceCountdown();
+
         RukkitConfig rukkitConfig = Rukkit.getConfig();
         int countdown = Math.max(0, rukkitConfig.gameStartCountdownSeconds);
 
@@ -475,6 +556,12 @@ public class NetworkRoom {
     }
 
     private void startGameNow() {
+        if (!hasOpposingTeams()) {
+            connectionManager.broadcastServerMessage("Game cannot start: no opposing team.");
+            playerCountChanged();
+            return;
+        }
+        cancelAutoStartForceCountdown();
         try {
             connectionManager.broadcast(Packet.gameStart());
             // Set shared control.
