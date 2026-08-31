@@ -1,5 +1,6 @@
 package cn.rukkit.service;
 
+import cn.rukkit.config.RoundConfig;
 import cn.rukkit.config.RukkitConfig;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -14,9 +15,11 @@ import java.util.Properties;
 /**
  * Editor for child-server configuration files.
  *
- * Rukkit settings are stored in rukkit.yml.
- * Uplist settings are stored separately in uplist_config.properties.
- * Uplist settings never modify rukkit.yml.
+ * rukkit.yml -> Rukkit/server settings
+ * uplist_config.properties -> master-list publication fields
+ * round.yml -> default/new-game round settings
+ *
+ * Each file is edited independently.
  */
 public final class ServerConfigEditor {
     private ServerConfigEditor() {}
@@ -29,13 +32,17 @@ public final class ServerConfigEditor {
         String normalized = normalizeKey(key);
         String value = stripQuotes(rawValue.trim());
 
-        // In this Rukkit/Uplist setup the master-list "server name" is the
-        // value carried by uplist_config.properties: game_map. Do not touch
-        // rukkit.yml when editing it.
+        // Uplist fields belong only to uplist_config.properties.
         if (isUplistKey(normalized)) {
             return editUplist(configFile.getParentFile(), normalized, value);
         }
 
+        // Round/game defaults belong only to round.yml.
+        if (isRoundKey(normalized)) {
+            return editRound(configFile.getParentFile(), normalized, value);
+        }
+
+        // Everything else in this editor is a Rukkit setting.
         Yaml yaml = new Yaml();
         RukkitConfig cfg;
         try (FileReader reader = new FileReader(configFile)) { cfg = yaml.loadAs(reader, RukkitConfig.class); }
@@ -78,29 +85,32 @@ public final class ServerConfigEditor {
         try (FileWriter writer = new FileWriter(configFile)) {
             writer.write(yaml.dumpAs(cfg, Tag.MAP, DumperOptions.FlowStyle.BLOCK));
         }
-        return key + " = " + value;
+        return "rukkit " + key + " = " + value;
     }
 
     private static boolean isUplistKey(String key) {
         switch (key) {
-            case "name":
-            case "servername":
-            case "uplistname":
-            case "gamename":
-            case "map":
-            case "mapname":
-            case "uplistmap":
-            case "gamemap":
+            case "name": case "servername": case "uplistname": case "gamename":
+            case "map": case "mapname": case "uplistmap": case "gamemap":
+            case "host": case "hostname": case "createdby": case "uplisthost":
+            case "maxplayercount": case "uplistmaxplayercount":
+            case "portnumber": case "uplistport":
                 return true;
-            case "host":
-            case "hostname":
-            case "createdby":
-            case "uplisthost":
-                return true;
-            case "maxplayercount":
-            case "uplistmaxplayercount":
-            case "portnumber":
-            case "uplistport":
+            default:
+                return false;
+        }
+    }
+
+    private static boolean isRoundKey(String key) {
+        switch (key) {
+            case "roundmap": case "roundmapname": case "mapname":
+            case "roundmaptype": case "maptype":
+            case "roundincome": case "income":
+            case "roundcredits": case "credits":
+            case "rounddisablenuke": case "disablenuke":
+            case "roundsharedcontrol": case "sharedcontrol":
+            case "roundfogtype": case "fogtype":
+            case "roundstartingunits": case "startingunits":
                 return true;
             default:
                 return false;
@@ -112,37 +122,23 @@ public final class ServerConfigEditor {
         requireText(value);
 
         File file = new File(serverDir, "uplist_config.properties");
-        Properties p = new Properties();
-        if (file.isFile()) {
-            try (InputStream in = new FileInputStream(file)) { p.load(in); }
-        }
+        Properties p = loadProperties(file);
 
         String property;
         switch (key) {
-            // IMPORTANT: for this Uplist/master-server payload, the field the
-            // user uses as the public server name is game_map.
-            case "name":
-            case "servername":
-            case "uplistname":
-            case "gamename":
-            case "map":
-            case "mapname":
-            case "uplistmap":
-            case "gamemap":
+            case "name": case "servername": case "uplistname": case "gamename":
+            case "map": case "mapname": case "uplistmap": case "gamemap":
+                // For this setup the field displayed by the master list as the
+                // server name is game_map. Keep game_name independent.
                 property = "game_map";
                 break;
-            case "host":
-            case "hostname":
-            case "createdby":
-            case "uplisthost":
+            case "host": case "hostname": case "createdby": case "uplisthost":
                 property = "created_by";
                 break;
-            case "maxplayercount":
-            case "uplistmaxplayercount":
+            case "maxplayercount": case "uplistmaxplayercount":
                 property = "max_player_count";
                 break;
-            case "portnumber":
-            case "uplistport":
+            case "portnumber": case "uplistport":
                 property = "port_number";
                 break;
             default:
@@ -154,10 +150,64 @@ public final class ServerConfigEditor {
         }
 
         p.setProperty(property, value);
-        try (OutputStream out = new FileOutputStream(file)) {
-            p.store(out, "Rusted Warfare 1.15 Master Server Configuration");
-        }
+        saveProperties(file, p, "Rusted Warfare 1.15 Master Server Configuration");
         return "uplist " + property + " = " + value;
+    }
+
+    private static String editRound(File serverDir, String key, String value) throws Exception {
+        if (serverDir == null) throw new IllegalArgumentException("Server directory not found");
+        requireText(value);
+
+        File file = new File(serverDir, "round.yml");
+        Yaml yaml = new Yaml();
+        RoundConfig cfg;
+
+        if (file.isFile()) {
+            try (FileReader reader = new FileReader(file)) {
+                cfg = yaml.loadAs(reader, RoundConfig.class);
+            }
+        } else {
+            cfg = new RoundConfig();
+        }
+        if (cfg == null) cfg = new RoundConfig();
+
+        switch (key) {
+            case "roundmap": case "roundmapname": case "mapname":
+                cfg.mapName = value; break;
+            case "roundmaptype": case "maptype":
+                cfg.mapType = nonNegativeInt(value, "mapType"); break;
+            case "roundincome": case "income":
+                cfg.income = nonNegativeFloat(value, "income"); break;
+            case "roundcredits": case "credits":
+                cfg.credits = nonNegativeInt(value, "credits"); break;
+            case "rounddisablenuke": case "disablenuke":
+                cfg.disableNuke = bool(value, "disableNuke"); break;
+            case "roundsharedcontrol": case "sharedcontrol":
+                cfg.sharedControl = bool(value, "sharedControl"); break;
+            case "roundfogtype": case "fogtype":
+                cfg.fogType = nonNegativeInt(value, "fogType"); break;
+            case "roundstartingunits": case "startingunits":
+                cfg.startingUnits = nonNegativeInt(value, "startingUnits"); break;
+            default:
+                throw new IllegalArgumentException("Unsupported round setting: " + key + ". Use 'server edit help'.");
+        }
+
+        try (FileWriter writer = new FileWriter(file)) {
+            writer.write(yaml.dumpAs(cfg, Tag.MAP, DumperOptions.FlowStyle.BLOCK));
+        }
+        return "round " + key + " = " + value;
+    }
+
+    private static Properties loadProperties(File file) throws IOException {
+        Properties p = new Properties();
+        if (file.isFile()) {
+            try (InputStream in = new FileInputStream(file)) { p.load(in); }
+        }
+        return p;
+    }
+
+    private static void saveProperties(File file, Properties p, String header) throws IOException {
+        try (OutputStream out = new FileOutputStream(file)) { p.store(out, header); }
     }
 
     public static String editMany(File configFile, List<String> assignments) throws Exception {
@@ -183,10 +233,18 @@ public final class ServerConfigEditor {
             try (InputStream in = new FileInputStream(uplist)) { p.load(in); }
         }
 
+        File roundFile = new File(configFile.getParentFile(), "round.yml");
+        RoundConfig r = roundFile.isFile() ? yaml.loadAs(new FileReader(roundFile), RoundConfig.class) : new RoundConfig();
+        if (r == null) r = new RoundConfig();
+
         return "Uplist name=" + p.getProperty("game_map", "<unset>") +
                 " | host=" + p.getProperty("created_by", "<unset>") +
-                " | map=" + p.getProperty("game_name", "<unset>") +
+                " | uplistGameName=" + p.getProperty("game_name", "<unset>") +
+                " | uplistMap=" + p.getProperty("game_map", "<unset>") +
                 " | maxPlayers=" + p.getProperty("max_player_count", "<unset>") +
+                " | Round map=" + r.mapName +
+                " | income=" + r.income +
+                " | disableNuke=" + r.disableNuke +
                 " | Rukkit filter=" + c.officialMapFilterEnabled +
                 " | mapPlayers=" + c.officialMapMinPlayers + "-" + c.officialMapMaxPlayers +
                 " | startMin=" + c.minStartPlayer +
@@ -208,14 +266,17 @@ public final class ServerConfigEditor {
             "  afkCancelOnAdminChat, afkCancelOnAdminCommand, afkTransferControl\n" +
             "  maxUnitsPerPlayer, syncEnabled, checksumSync, onlineMode, singlePlayerMode, isDebug\n\n" +
             "Uplist settings (uplist_config.properties ONLY):\n" +
-            "  name/serverName/game_name/map -> game_map (public server name)\n" +
-            "  host/hostname/created_by -> created_by\n" +
+            "  name -> game_map (public server name in master list)\n" +
+            "  host/created_by -> created_by\n" +
             "  max_player_count -> max_player_count\n" +
             "  port_number -> port_number\n\n" +
-            "Example:\n" +
+            "Round settings (round.yml ONLY):\n" +
+            "  roundMapName/mapName, mapType, income, credits\n" +
+            "  disableNuke, sharedControl, fogType, startingUnits\n\n" +
+            "Examples:\n" +
             "  server edit 11 name=\"DUELS 1 VS 1 [CA-C #1]\" host=SERVER\n" +
-            "  server edit 11-26 host=SERVER\n" +
-            "  server edit 11-26 name=\"DUELS 1 VS 1\" max_player_count=2";
+            "  server edit 11 mapName=\"[p2]Dire Straight (2p)\" income=1 disableNuke=false\n" +
+            "  server edit 11-26 mapName=\"[p2]Dire Straight (2p)\" income=1 disableNuke=false";
     }
 
     private static String normalizeKey(String key) { return key.trim().replace("-", "").replace("_", "").toLowerCase(Locale.ROOT); }
@@ -224,4 +285,5 @@ public final class ServerConfigEditor {
     private static boolean bool(String value, String key) { if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) throw new IllegalArgumentException(key + " must be true or false"); return Boolean.parseBoolean(value); }
     private static int positiveInt(String value, String key) { int n = nonNegativeInt(value, key); if (n < 1) throw new IllegalArgumentException(key + " must be >= 1"); return n; }
     private static int nonNegativeInt(String value, String key) { try { int n = Integer.parseInt(value); if (n < 0) throw new IllegalArgumentException(key + " must be >= 0"); return n; } catch (NumberFormatException e) { throw new IllegalArgumentException(key + " must be an integer"); } }
+    private static float nonNegativeFloat(String value, String key) { try { float n = Float.parseFloat(value); if (Float.isNaN(n) || Float.isInfinite(n) || n < 0f) throw new IllegalArgumentException(key + " must be >= 0"); return n; } catch (NumberFormatException e) { throw new IllegalArgumentException(key + " must be a number"); } }
 }
