@@ -35,7 +35,7 @@ jobs:
               raise SystemExit('CommandPlugin onLoad marker not found')
           if 'OfficialMap.applyPlayerCountFilter(' not in s:
               s = s.replace(marker, insert, 1)
-          p.write_text(s, encoding='utf-8', newline='\\n')
+          p.write_text(s, encoding='utf-8', newline='\n')
 
           p = Path('src/main/java/cn/rukkit/config/RukkitConfig.java')
           s = p.read_text(encoding='utf-8')
@@ -49,7 +49,7 @@ jobs:
               raise SystemExit('RukkitConfig AFK marker not found')
           if 'Migrate the old AFK wording' not in s:
               s = s.replace(marker, marker + migration, 1)
-          p.write_text(s, encoding='utf-8', newline='\\n')
+          p.write_text(s, encoding='utf-8', newline='\n')
           PY
       - name: Build
         run: ./gradlew buildRukkit --no-daemon
