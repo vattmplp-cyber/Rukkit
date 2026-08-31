@@ -30,8 +30,7 @@ public final class ServerConfigEditor {
         boolean nameChanged = false;
 
         switch (normalized) {
-            case "name": case "serveruser":
-                requireText(value); cfg.serverUser = value; nameChanged = true; break;
+            case "name": case "serveruser": requireText(value); cfg.serverUser = value; nameChanged = true; break;
             case "motd": case "servermotd": cfg.serverMotd = value; break;
             case "welcomemsg": cfg.welcomeMsg = value; break;
             case "maxplayer": cfg.maxPlayer = positiveInt(value, "maxPlayer"); break;
@@ -64,12 +63,7 @@ public final class ServerConfigEditor {
         if (cfg.officialMapMinPlayers < 0) cfg.officialMapMinPlayers = 0;
         if (cfg.officialMapMaxPlayers < cfg.officialMapMinPlayers) cfg.officialMapMaxPlayers = cfg.officialMapMinPlayers;
 
-        try (FileWriter writer = new FileWriter(configFile)) {
-            writer.write(yaml.dumpAs(cfg, Tag.MAP, DumperOptions.FlowStyle.BLOCK));
-        }
-
-        // The Uplist plugin runs from the child server directory and keeps its own
-        // properties file. Keep game_name synchronized with the Rukkit server name.
+        try (FileWriter writer = new FileWriter(configFile)) { writer.write(yaml.dumpAs(cfg, Tag.MAP, DumperOptions.FlowStyle.BLOCK)); }
         if (nameChanged) syncUplistName(configFile.getParentFile(), value);
         return key + " = " + value;
     }
@@ -77,14 +71,14 @@ public final class ServerConfigEditor {
     private static void syncUplistName(File serverDir, String name) {
         if (serverDir == null) return;
         File file = new File(serverDir, "uplist_config.properties");
-        if (!file.isFile()) return;
         Properties p = new Properties();
-        try (InputStream in = new FileInputStream(file)) { p.load(in); }
-        catch (IOException ignored) { return; }
+        if (file.isFile()) {
+            try (InputStream in = new FileInputStream(file)) { p.load(in); }
+            catch (IOException ignored) {}
+        }
         p.setProperty("game_name", name);
-        try (OutputStream out = new FileOutputStream(file)) {
-            p.store(out, "Rukkit Uplist configuration");
-        } catch (IOException ignored) {}
+        try (OutputStream out = new FileOutputStream(file)) { p.store(out, "Rukkit Uplist configuration"); }
+        catch (IOException ignored) {}
     }
 
     public static String editMany(File configFile, List<String> assignments) throws Exception {
@@ -103,10 +97,7 @@ public final class ServerConfigEditor {
         RukkitConfig c;
         try (FileReader reader = new FileReader(configFile)) { c = yaml.loadAs(reader, RukkitConfig.class); }
         if (c == null) throw new IllegalArgumentException("Cannot read rukkit.yml");
-        return "name=" + c.serverUser + " | filter=" + c.officialMapFilterEnabled +
-            " | mapPlayers=" + c.officialMapMinPlayers + "-" + c.officialMapMaxPlayers +
-            " | startMin=" + c.minStartPlayer + " | maxPlayer=" + c.maxPlayer +
-            " | maxRoom=" + c.maxRoom + " | AFK=" + c.afkEnabled;
+        return "name=" + c.serverUser + " | filter=" + c.officialMapFilterEnabled + " | mapPlayers=" + c.officialMapMinPlayers + "-" + c.officialMapMaxPlayers + " | startMin=" + c.minStartPlayer + " | maxPlayer=" + c.maxPlayer + " | maxRoom=" + c.maxRoom + " | AFK=" + c.afkEnabled;
     }
 
     public static String help() {
@@ -129,18 +120,9 @@ public final class ServerConfigEditor {
     }
 
     private static String normalizeKey(String key) { return key.trim().replace("-", "").replace("_", "").toLowerCase(Locale.ROOT); }
-    private static String stripQuotes(String value) {
-        if (value.length() >= 2 && ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'")))) return value.substring(1, value.length() - 1);
-        return value;
-    }
+    private static String stripQuotes(String value) { if (value.length() >= 2 && ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'")))) return value.substring(1, value.length() - 1); return value; }
     private static void requireText(String value) { if (value.isEmpty()) throw new IllegalArgumentException("Text value cannot be empty"); }
-    private static boolean bool(String value, String key) {
-        if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) throw new IllegalArgumentException(key + " must be true or false");
-        return Boolean.parseBoolean(value);
-    }
+    private static boolean bool(String value, String key) { if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) throw new IllegalArgumentException(key + " must be true or false"); return Boolean.parseBoolean(value); }
     private static int positiveInt(String value, String key) { int n = nonNegativeInt(value, key); if (n < 1) throw new IllegalArgumentException(key + " must be >= 1"); return n; }
-    private static int nonNegativeInt(String value, String key) {
-        try { int n = Integer.parseInt(value); if (n < 0) throw new IllegalArgumentException(key + " must be >= 0"); return n; }
-        catch (NumberFormatException e) { throw new IllegalArgumentException(key + " must be an integer"); }
-    }
+    private static int nonNegativeInt(String value, String key) { try { int n = Integer.parseInt(value); if (n < 0) throw new IllegalArgumentException(key + " must be >= 0"); return n; } catch (NumberFormatException e) { throw new IllegalArgumentException(key + " must be an integer"); } }
 }
