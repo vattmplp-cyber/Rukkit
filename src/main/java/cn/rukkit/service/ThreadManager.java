@@ -50,6 +50,14 @@ public class ThreadManager
 	 * @param runnable Runnable task.
 	 * @return Future
 	 */
+	/**
+	 * Schedule a periodic task against the executor's fixed-rate monotonic clock.
+	 * This avoids accumulating delay when a previous invocation takes slightly longer.
+	 */
+	public ScheduledFuture<?> scheduleAtFixedRate(Runnable runnable, long initialDelay, long period, TimeUnit unit) {
+		return executorService.scheduleAtFixedRate(runnable, initialDelay, period, unit);
+	}
+
 	public Future submit(Runnable runnable) {
 		return executorService.submit(runnable);
 	}

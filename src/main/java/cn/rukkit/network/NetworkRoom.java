@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Random;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class NetworkRoom {
@@ -29,7 +30,7 @@ public class NetworkRoom {
     private LinkedList<GameCommand> commandQuere = new LinkedList<GameCommand>();
 
     public RoundConfig config;
-    public int stepRate = 200;
+    public int stepRate = NetworkTick.WINDOW_PERIOD_MILLIS;
     public int currentStep = 0;
     public int checkSumFrame = 0;
     public final AtomicInteger checkSumReceived = new AtomicInteger();
@@ -156,7 +157,7 @@ public class NetworkRoom {
             RukkitConfig cfg = Rukkit.getConfig();
             if (!isPaused) {
                 // Add step
-                currentStep += 10;
+                currentStep += NetworkTick.FRAMES_PER_WINDOW;
                 if (Rukkit.getConfig().checksumSync) {
                     if (currentStep % 300 == 0) {
                         if (!checkRequested) {
@@ -211,7 +212,7 @@ public class NetworkRoom {
             RukkitConfig cfg = Rukkit.getConfig();
             if (!isPaused) {
                 // Add tickTime
-                currentStep += 10;
+                currentStep += NetworkTick.FRAMES_PER_WINDOW;
             }
 
             // If playercount == 1 then have a sync and pauseGame;
@@ -492,7 +493,11 @@ public class NetworkRoom {
             for(RoomConnection conn : connectionManager.getConnections()) {
                 conn.updateTeamList();
             }
-            gameTaskFuture = Rukkit.getThreadManager().schedule(new GameTask(), stepRate, stepRate);
+            gameTaskFuture = Rukkit.getThreadManager().scheduleAtFixedRate(
+                    new GameTask(),
+                    NetworkTick.WINDOW_PERIOD_NANOS,
+                    NetworkTick.WINDOW_PERIOD_NANOS,
+                    TimeUnit.NANOSECONDS);
             //connectionManager.broadcast()
             isGaming = true;
             RoomStartGameEvent.getListenerList().callListeners(new RoomStartGameEvent(this));
