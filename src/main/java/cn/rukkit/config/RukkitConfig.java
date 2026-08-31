@@ -51,10 +51,17 @@ public class RukkitConfig extends BaseConfig
 	public boolean afkEnabled = true;
 	public int afkCountdownSeconds = 30;
 	public int afkWarningIntervalSeconds = 10;
-	public int afkFinalWarningSeconds = 5;
+	// 0 = no extra final-second warning. This keeps the default output at 30/20/10.
+	public int afkFinalWarningSeconds = 0;
 	public boolean afkCancelOnAdminChat = true;
 	public boolean afkCancelOnAdminCommand = true;
 	public boolean afkTransferControl = true;
+
+	// Official-map player-count filter.
+	// Disabled by default for compatibility; enable it per server in rukkit.yml.
+	public boolean officialMapFilterEnabled = false;
+	public int officialMapMinPlayers = 2;
+	public int officialMapMaxPlayers = 10;
 	
 	//registerTimeout default = 5 (s)
 	public int registerTimeout = 5;
@@ -196,7 +203,10 @@ public class RukkitConfig extends BaseConfig
 		if (playerPingIntervalSeconds < 1) playerPingIntervalSeconds = 2;
 		if (afkCountdownSeconds < 1) afkCountdownSeconds = 30;
 		if (afkWarningIntervalSeconds < 1) afkWarningIntervalSeconds = 10;
-		if (afkFinalWarningSeconds < 1) afkFinalWarningSeconds = 5;
+		if (afkFinalWarningSeconds < 0) afkFinalWarningSeconds = 0;
+		if (officialMapMinPlayers < 1) officialMapMinPlayers = 2;
+		if (officialMapMaxPlayers < officialMapMinPlayers) officialMapMaxPlayers = officialMapMinPlayers;
+		if (officialMapMaxPlayers > maxPlayer) officialMapMaxPlayers = maxPlayer;
 		if (notifications == null) notifications = new LinkedHashMap<>();
 		setNotificationDefault("rukkit.playerJoin", "Player {playerName} joined the server!");
 		setNotificationDefault("rukkit.playerLeft", "Player {playerName} left the server({reason})!");
@@ -205,10 +215,10 @@ public class RukkitConfig extends BaseConfig
 		setNotificationDefault("rukkit.gameFull", "Game is full!");
 		setNotificationDefault("rukkit.gameStarted", "Started game on server: {serverName}");
 		setNotificationDefault("rukkit.gameStarting", "Game Starting {seconds}...");
-		setNotificationDefault("rukkit.afk.start", "AFK timer started.\n'{adminName}' has {seconds} seconds to send a chat message or perform an admin action.");
-		setNotificationDefault("rukkit.afk.warning", "'{adminName}' has {seconds} seconds to send a chat message or perform an admin action.");
+		setNotificationDefault("rukkit.afk.start", "AFK timer started.\n'{adminName}' has {seconds} seconds to send any chat message");
+		setNotificationDefault("rukkit.afk.warning", "'{adminName}' has {seconds} seconds to send any chat message");
 		setNotificationDefault("rukkit.afk.cancelled", "Countdown stopped!");
-		setNotificationDefault("rukkit.afk.transferred", "'{adminName}' is AFK, control switched to: '{newAdminName}'.");
+		setNotificationDefault("rukkit.afk.transferred", "'{adminName}' is AFK, control switched to: '{newAdminName}'");
 		if (helpHiddenCommands == null) helpHiddenCommands = new java.util.ArrayList<>();
 		if (!helpHiddenCommands.contains("qc")) helpHiddenCommands.add("qc");
 	}
