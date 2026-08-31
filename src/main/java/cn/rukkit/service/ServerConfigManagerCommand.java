@@ -1,7 +1,6 @@
 package cn.rukkit.service;
 
 import cn.rukkit.Rukkit;
-import cn.rukkit.config.RukkitConfig;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -34,7 +33,14 @@ public final class ServerConfigManagerCommand {
         for (int i = 2; i < args.length; i++) {
             if ("--stop".equalsIgnoreCase(args[i])) stopFirst = true;
             else if ("--show".equalsIgnoreCase(args[i])) show = true;
-            else rest.add(args[i]);
+            else {
+                String assignment = args[i];
+                int equals = assignment.indexOf('=');
+                if (equals > 0 && "mapName".equalsIgnoreCase(assignment.substring(0, equals).trim())) {
+                    assignment = "roundMapName=" + assignment.substring(equals + 1);
+                }
+                rest.add(assignment);
+            }
         }
 
         List<String> names = manager.resolveTargets(target);
