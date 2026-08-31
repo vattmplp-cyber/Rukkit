@@ -156,6 +156,42 @@ public class Rukkit {
 		return pluginManager;
 	}
 
+	private static void migrateRukkitConfigFile(File confFile) throws IOException {
+		String text = new String(java.nio.file.Files.readAllBytes(confFile.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+		String original = text;
+
+		// Existing configs created before the new defaults must receive the new options.
+		// Keep user settings intact; only insert options that are missing.
+		text = text.replaceAll("(?m)^(\\s*afkFinalWarningSeconds:\\s*)5\\s*$", "$10");
+		if (!text.matches("(?s).*\\bafkFinalWarningSeconds\\s*:.*")) {
+			String marker = "gameStartCountdownSeconds:";
+			int pos = text.indexOf(marker);
+			if (pos >= 0) {
+				int lineEnd = text.indexOf('\n', pos);
+				if (lineEnd < 0) lineEnd = text.length();
+				String block = "afkEnabled: true\nafkCountdownSeconds: 30\nafkWarningIntervalSeconds: 10\nafkFinalWarningSeconds: 0\nafkCancelOnAdminChat: true\nafkCancelOnAdminCommand: true\nafkTransferControl: true\n";
+				text = text.substring(0, lineEnd + (lineEnd < text.length() ? 1 : 0)) + block
+						+ text.substring(lineEnd + (lineEnd < text.length() ? 1 : 0));
+			}
+		}
+
+		if (!text.matches("(?s).*\\bofficialMapFilterEnabled\\s*:.*")) {
+			String marker = "maxUnitsPerPlayer:";
+			int pos = text.indexOf(marker);
+			if (pos >= 0) {
+				int lineEnd = text.indexOf('\n', pos);
+				if (lineEnd < 0) lineEnd = text.length();
+				String block = "officialMapFilterEnabled: true\nofficialMapMinPlayers: 4\nofficialMapMaxPlayers: 10\n";
+				text = text.substring(0, lineEnd + (lineEnd < text.length() ? 1 : 0)) + block
+						+ text.substring(lineEnd + (lineEnd < text.length() ? 1 : 0));
+			}
+		}
+
+		if (!text.equals(original)) {
+			java.nio.file.Files.write(confFile.toPath(), text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+		}
+	}
+
 	public static void loadRukkitConfig() throws IOException {
 		if (config != null) return;
 		Yaml yaml = new Yaml();
@@ -173,6 +209,7 @@ public class Rukkit {
 			writer.flush();
 			writer.close();
 		}
+		migrateRukkitConfigFile(confFile);
 		config = yaml.loadAs((new FileInputStream(confFile)), RukkitConfig.class);
 		if (config == null) config = new RukkitConfig();
 		config.applyDefaults();
@@ -281,7 +318,6 @@ public class Rukkit {
 			log.warn("Invalid Language configuration {} detected, we will use system default language. Please check your rukkit.yml.", getConfig().lang);
 		}
 		log.info("Current Language: {}", LangUtil.lc);
-		//init SaveManager.
 		log.info("load::DefaultSaveData..."); // 加载保存文件
 		try {
 			loadDefaultSave();
