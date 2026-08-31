@@ -1,0 +1,56 @@
+name: Apply Rukkit fixes final
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-rukkit-fix3.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: peremogabyde2
+          fetch-depth: 0
+      - name: Patch sources
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/main/java/cn/rukkit/plugin/internal/CommandPlugin.java')
+          s = p.read_text(encoding='utf-8')
+          old = '''\tprivate boolean shouldAnnounceAfk(int seconds, int total) {\n\t\tint interval = Math.max(1, Rukkit.getConfig().afkWarningIntervalSeconds);\n\t\tint finalSeconds = Math.max(1, Rukkit.getConfig().afkFinalWarningSeconds);\n\t\treturn seconds == total || seconds % interval == 0 || seconds <= finalSeconds;\n\t}'''
+          new = '''\tprivate boolean shouldAnnounceAfk(int seconds, int total) {\n\t\tint interval = Math.max(1, Rukkit.getConfig().afkWarningIntervalSeconds);\n\t\tint finalSeconds = Math.max(0, Rukkit.getConfig().afkFinalWarningSeconds);\n\t\treturn seconds == total || seconds % interval == 0 || (finalSeconds > 0 && seconds == finalSeconds);\n\t}'''
+          if old not in s:
+              raise SystemExit('AFK countdown block not found')
+          s = s.replace(old, new, 1)
+          s = s.replace('"AFK timer started.\\n\'{adminName}\' has {seconds} seconds to send a chat message or perform an admin action."', '"AFK timer started.\\n\'{adminName}\' has {seconds} seconds to send any chat message"', 1)
+          s = s.replace('"\'{adminName}\' has {seconds} seconds to send a chat message or perform an admin action."', '"\'{adminName}\' has {seconds} seconds to send any chat message"', 1)
+          marker = '\t\tgetLogger().info("CommandPlugin::onLoad()");\n'
+          if marker not in s:
+              raise SystemExit('CommandPlugin onLoad marker not found')
+          if 'OfficialMap.applyPlayerCountFilter(' not in s:
+              insert = marker + '''\t\tif (Rukkit.getConfig().officialMapFilterEnabled) {\n\t\t\tOfficialMap.applyPlayerCountFilter(\n\t\t\t\t\tRukkit.getConfig().officialMapMinPlayers,\n\t\t\t\t\tRukkit.getConfig().officialMapMaxPlayers);\n\t\t}\n'''
+              s = s.replace(marker, insert, 1)
+          p.write_text(s, encoding='utf-8', newline='\n')
+
+          p = Path('src/main/java/cn/rukkit/config/RukkitConfig.java')
+          s = p.read_text(encoding='utf-8')
+          marker = '\t\tsetNotificationDefault("rukkit.afk.transferred", "\'{adminName}\' is AFK, control switched to: \'{newAdminName}\'");\n'
+          if marker not in s:
+              raise SystemExit('RukkitConfig AFK marker not found')
+          if 'Migrate the old AFK wording' not in s:
+              migration = '''\t\t// Migrate the old AFK wording from existing rukkit.yml files.\n\t\tif (notifications.get("rukkit.afk.start") != null && notifications.get("rukkit.afk.start").contains("perform an admin action")) {\n\t\t\tnotifications.put("rukkit.afk.start", "AFK timer started.\\n\'{adminName}\' has {seconds} seconds to send any chat message");\n\t\t}\n\t\tif (notifications.get("rukkit.afk.warning") != null && notifications.get("rukkit.afk.warning").contains("perform an admin action")) {\n\t\t\tnotifications.put("rukkit.afk.warning", "\'{adminName}\' has {seconds} seconds to send any chat message");\n\t\t}\n'''
+              s = s.replace(marker, marker + migration, 1)
+          p.write_text(s, encoding='utf-8', newline='\n')
+          PY
+      - name: Build Rukkit
+        run: bash ./gradlew buildRukkit --no-daemon
+      - name: Commit fixes and remove temporary workflows
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/apply-rukkit-fix.yml .github/workflows/apply-rukkit-fix2.yml .github/workflows/apply-rukkit-fix3.yml
+          git add src/main/java/cn/rukkit/plugin/internal/CommandPlugin.java src/main/java/cn/rukkit/config/RukkitConfig.java .github/workflows/apply-rukkit-fix.yml .github/workflows/apply-rukkit-fix2.yml .github/workflows/apply-rukkit-fix3.yml
+          git commit -m 'Fix AFK messages and enable official map filtering [skip patch]'
+          git push origin HEAD:peremogabyde2
