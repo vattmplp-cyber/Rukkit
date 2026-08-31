@@ -1,0 +1,64 @@
+name: Migrate config defaults
+on:
+  push:
+    paths:
+      - '.github/workflows/migrate-config-defaults.yml'
+permissions:
+  contents: write
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: peremogabyde2
+          fetch-depth: 0
+      - name: Apply config migration
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('src/main/java/cn/rukkit/Rukkit.java')
+          s = p.read_text(encoding='utf-8')
+
+          marker = '\t\tconfig = yaml.loadAs((new FileInputStream(confFile)), RukkitConfig.class);\n'
+          if marker not in s:
+              raise SystemExit('Rukkit config load marker not found')
+
+          if 'migrateRukkitConfigFile(confFile);' not in s:
+              s = s.replace(marker, '\t\tmigrateRukkitConfigFile(confFile);\n' + marker, 1)
+
+          method_marker = '\tpublic static final void loadRoundConfig() throws IOException {\n'
+          if method_marker not in s:
+              raise SystemExit('loadRoundConfig marker not found')
+
+          method = '''\tprivate static void migrateRukkitConfigFile(File confFile) throws IOException {\n\t\tString text = new String(java.nio.file.Files.readAllBytes(confFile.toPath()), java.nio.charset.StandardCharsets.UTF_8);\n\t\tString original = text;\n\n\t\t// AFK final warning was originally generated with the old default 5.\n\t\t// Migrate that old default to the new default 0, while preserving other values.\n\t\ttext = text.replaceAll("(?m)^(\\s*afkFinalWarningSeconds:\\s*)5\\s*$", "$10");\n\t\tif (!text.matches("(?s).*\\bafkFinalWarningSeconds\\s*:.*")) {\n\t\t\tString afkMarker = "afkWarningIntervalSeconds:";\n\t\t\tint pos = text.indexOf(afkMarker);\n\t\t\tif (pos >= 0) {\n\t\t\t\tint lineEnd = text.indexOf('\\n', pos);\n\t\t\t\tif (lineEnd < 0) lineEnd = text.length();\n\t\t\t\ttext = text.substring(0, lineEnd + (lineEnd < text.length() ? 1 : 0))\n\t\t\t\t\t\t+ "afkFinalWarningSeconds: 0\\n"\n\t\t\t\t\t\t+ text.substring(lineEnd + (lineEnd < text.length() ? 1 : 0));\n\t\t\t} else {\n\t\t\t\ttext += "\\nafkFinalWarningSeconds: 0\\n";\n\t\t\t}\n\t\t}\n\n\t\tif (!text.matches("(?s).*\\bofficialMapFilterEnabled\\s*:.*")) {\n\t\t\tString block = "\\nofficialMapFilterEnabled: false\\nofficialMapMinPlayers: 2\\nofficialMapMaxPlayers: 10\\n";\n\t\t\ttext = text.endsWith("\\n") ? text + block.substring(1) : text + block;\n\t\t}\n\n\t\tif (!text.equals(original)) {\n\t\t\tjava.nio.file.Files.write(confFile.toPath(), text.getBytes(java.nio.charset.StandardCharsets.UTF_8));\n\t\t}\n\t}\n\n'''
+          if 'private static void migrateRukkitConfigFile(File confFile)' not in s:
+              s = s.replace(method_marker, method + method_marker, 1)
+
+          p.write_text(s, encoding='utf-8', newline='\n')
+
+          p = Path('rukkit.yml.example')
+          s = p.read_text(encoding='utf-8')
+
+          if 'afkFinalWarningSeconds:' not in s:
+              marker = 'maxUnitsPerPlayer: 1000\n'
+              block = '''maxUnitsPerPlayer: 1000\n\n# Lobby administrator AFK takeover\nafkEnabled: true\nafkCountdownSeconds: 30\nafkWarningIntervalSeconds: 10\nafkFinalWarningSeconds: 0\nafkCancelOnAdminChat: true\nafkCancelOnAdminCommand: true\nafkTransferControl: true\n\n# Official-map player-count filter (disabled by default)\nofficialMapFilterEnabled: false\nofficialMapMinPlayers: 2\nofficialMapMaxPlayers: 10\n'''
+              if marker not in s:
+                  raise SystemExit('rukkit.yml.example insertion marker not found')
+              s = s.replace(marker, block, 1)
+          else:
+              s = s.replace('afkFinalWarningSeconds: 5', 'afkFinalWarningSeconds: 0')
+
+          p.write_text(s, encoding='utf-8', newline='\n')
+          PY
+      - name: Build Rukkit
+        run: ./gradlew buildRukkit --no-daemon
+      - name: Commit changes and remove migration workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/migrate-config-defaults.yml
+          git add src/main/java/cn/rukkit/Rukkit.java rukkit.yml.example .github/workflows/migrate-config-defaults.yml
+          git commit -m 'Migrate config defaults and document new settings [skip patch]'
+          git push origin HEAD:peremogabyde2
