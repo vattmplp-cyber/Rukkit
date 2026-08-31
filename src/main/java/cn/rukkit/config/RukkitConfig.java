@@ -32,22 +32,14 @@ public class RukkitConfig extends BaseConfig
 	public int maxPacketFrame = 8192;
 	public String UUID = "00000000-0000-0000-0000-000000000000";
 	public String lang = Locale.getDefault().toString();
-	//max threads in manager.Default = 8;
 	public int threadPoolCount = 8;
-	// max unit in per player 单玩家最大单位
 	public int maxUnitsPerPlayer = 250;
-	// using question system to vote 投票系统使用提示框模式实现
-	// public boolean usingPopupInVote = false;
-	
-	//Ping packet receive timeout.default = 8000 (ms)
 	public int pingTimeout = 8000;
 
-	// Connected-player heartbeat watchdog. The client must keep answering Ping(108).
 	public boolean playerConnectionWatchdogEnabled = true;
 	public int playerConnectionTimeoutSeconds = 15;
 	public int playerPingIntervalSeconds = 2;
 
-	// Lobby administrator AFK takeover.
 	public boolean afkEnabled = true;
 	public int afkCountdownSeconds = 30;
 	public int afkWarningIntervalSeconds = 10;
@@ -58,25 +50,19 @@ public class RukkitConfig extends BaseConfig
 	public boolean afkTransferControl = true;
 
 	// Official-map player-count filter.
-	// Disabled by default for compatibility; enable it per server in rukkit.yml.
-	public boolean officialMapFilterEnabled = false;
-	public int officialMapMinPlayers = 2;
+	// Enabled by default. Maps below the configured minimum are hidden from the official map list.
+	public boolean officialMapFilterEnabled = true;
+	public int officialMapMinPlayers = 4;
 	public int officialMapMaxPlayers = 10;
 	
-	//registerTimeout default = 5 (s)
 	public int registerTimeout = 5;
-	
-	//Using commandQuere to manage game commands
 	public boolean useCommandQuere = false;
-
 	public boolean checksumSync = false;
 
-	// Shared data/plugin locations. Relative paths are resolved from the server's working directory.
 	public String pluginsPath = "plugins";
 	public String mapsPath = "maps";
 	public String modsPath = "mods";
 
-	// Multi-server manager.
 	public boolean serverManagerEnabled = true;
 	public boolean serverManagerOpenConsole = true;
 	public String serverManagerRoot = "servers";
@@ -86,19 +72,15 @@ public class RukkitConfig extends BaseConfig
 	public int serverManagerControlPortOffset = 10000;
 	public int serverManagerControlPort = 15123;
 	public String serverManagerControlToken = java.util.UUID.randomUUID().toString();
-	// Help configuration.
 	public int helpPageSize = 10;
 	public boolean helpShowDisabledCommands = false;
 	public boolean helpShowDescriptions = true;
-
-	// Team/spawn rules.
 	public int maxTeams = 2;
 
 	public java.util.Map<String, Boolean> playerPermissions = new java.util.HashMap<>();
 	public java.util.Map<String, Boolean> adminPermissions = new java.util.HashMap<>();
 	public java.util.List<Float> allowedIncomeValues = new java.util.ArrayList<>();
 	public java.util.List<Integer> allowedCreditsValues = new java.util.ArrayList<>();
-
 	public java.util.Map<String, String> notifications = new java.util.LinkedHashMap<>();
 	public java.util.List<String> helpHiddenCommands = new java.util.ArrayList<>();
 
@@ -117,7 +99,7 @@ public class RukkitConfig extends BaseConfig
 		m.put("self_team", true);
 		m.put("move", false);
 		m.put("self_move", true);
-		m.put("qc", true); // required by the client during connection; hidden from help by default
+		m.put("qc", true);
 		m.put("fog", false);
 		m.put("nukes", false);
 		m.put("startingunits", false);
@@ -152,7 +134,6 @@ public class RukkitConfig extends BaseConfig
 		m.put("team", true);
 		m.put("self_team", true);
 		m.put("qc", true);
-		// Explicitly disabled for admins, per your server policy.
 		m.put("state", false);
 		m.put("version", false);
 		m.put("cmaps", false);
@@ -162,7 +143,6 @@ public class RukkitConfig extends BaseConfig
 		m.put("share", false);
 		return m;
 	}
-
 
 	public String notification(String key, String fallback, Object... replacements) {
 		String value = notifications.getOrDefault(key, fallback);
@@ -204,7 +184,7 @@ public class RukkitConfig extends BaseConfig
 		if (afkCountdownSeconds < 1) afkCountdownSeconds = 30;
 		if (afkWarningIntervalSeconds < 1) afkWarningIntervalSeconds = 10;
 		if (afkFinalWarningSeconds < 0) afkFinalWarningSeconds = 0;
-		if (officialMapMinPlayers < 1) officialMapMinPlayers = 2;
+		if (officialMapMinPlayers < 1) officialMapMinPlayers = 4;
 		if (officialMapMaxPlayers < officialMapMinPlayers) officialMapMaxPlayers = officialMapMinPlayers;
 		if (officialMapMaxPlayers > maxPlayer) officialMapMaxPlayers = maxPlayer;
 		if (notifications == null) notifications = new LinkedHashMap<>();
@@ -219,7 +199,6 @@ public class RukkitConfig extends BaseConfig
 		setNotificationDefault("rukkit.afk.warning", "'{adminName}' has {seconds} seconds to send any chat message");
 		setNotificationDefault("rukkit.afk.cancelled", "Countdown stopped!");
 		setNotificationDefault("rukkit.afk.transferred", "'{adminName}' is AFK, control switched to: '{newAdminName}'");
-		// Migrate the old AFK wording from existing rukkit.yml files.
 		if (notifications.get("rukkit.afk.start") != null && notifications.get("rukkit.afk.start").contains("perform an admin action")) {
 			notifications.put("rukkit.afk.start", "AFK timer started.\n'{adminName}' has {seconds} seconds to send any chat message");
 		}
@@ -231,7 +210,7 @@ public class RukkitConfig extends BaseConfig
 	}
 
 	public RukkitConfig() {
-    this.configName = "rukkit.yml";
-    applyDefaults();
+		this.configName = "rukkit.yml";
+		applyDefaults();
 	}
 }
