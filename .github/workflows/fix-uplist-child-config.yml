@@ -1,0 +1,65 @@
+name: Fix child Uplist configs
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-uplist-child-config.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: peremogabyde2
+          fetch-depth: 0
+
+      - name: Patch Rukkit
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # 1) ServerConfigEditor: every server edit also maintains a complete
+          # per-server uplist_config.properties without modifying the Uplist plugin.
+          p = Path('src/main/java/cn/rukkit/service/ServerConfigEditor.java')
+          s = p.read_text(encoding='utf-8')
+          old = '''        try (FileWriter writer = new FileWriter(configFile)) { writer.write(yaml.dumpAs(cfg, Tag.MAP, DumperOptions.FlowStyle.BLOCK)); }\n        if (nameChanged) syncUplistName(configFile.getParentFile(), value);\n        return key + " = " + value;\n    }\n\n    private static void syncUplistName(File serverDir, String name) {\n        if (serverDir == null) return;\n        File file = new File(serverDir, "uplist_config.properties");\n        Properties p = new Properties();\n        if (file.isFile()) {\n            try (InputStream in = new FileInputStream(file)) { p.load(in); }\n            catch (IOException ignored) {}\n        }\n        p.setProperty("game_name", name);\n        try (OutputStream out = new FileOutputStream(file)) { p.store(out, "Rukkit Uplist configuration"); }\n        catch (IOException ignored) {}\n    }\n'''
+          new = '''        try (FileWriter writer = new FileWriter(configFile)) { writer.write(yaml.dumpAs(cfg, Tag.MAP, DumperOptions.FlowStyle.BLOCK)); }\n        syncUplistConfig(configFile.getParentFile(), cfg);\n        return key + " = " + value;\n    }\n\n    private static void syncUplistConfig(File serverDir, RukkitConfig cfg) {\n        if (serverDir == null || cfg == null) return;\n        File file = new File(serverDir, "uplist_config.properties");\n        Properties p = new Properties();\n        if (file.isFile()) {\n            try (InputStream in = new FileInputStream(file)) { p.load(in); }\n            catch (IOException ignored) {}\n        }\n\n        // Keep Uplist's protocol/static settings, but always synchronize\n        // the per-server identity and dynamic game values from Rukkit.\n        p.setProperty("game_name", cfg.serverUser);\n        p.setProperty("max_player_count", Integer.toString(Math.max(1, cfg.maxPlayer)));\n        p.setProperty("port_number", Integer.toString(cfg.serverPort));\n\n        File roundFile = new File(serverDir, "round.yml");\n        try (FileReader reader = new FileReader(roundFile)) {\n            org.yaml.snakeyaml.Yaml roundYaml = new org.yaml.snakeyaml.Yaml();\n            cn.rukkit.config.RoundConfig round = roundYaml.loadAs(reader, cn.rukkit.config.RoundConfig.class);\n            if (round != null && round.mapName != null && !round.mapName.trim().isEmpty()) {\n                p.setProperty("game_map", round.mapName);\n            }\n        } catch (Exception ignored) {}\n\n        // A missing creator should inherit a neutral Rukkit identity instead of\n        // silently falling back to an unrelated copied host name. Existing\n        // explicit created_by values are preserved.\n        if (!p.containsKey("created_by") || p.getProperty("created_by").trim().isEmpty()) {\n            p.setProperty("created_by", "Rukkit");\n        }\n\n        try (OutputStream out = new FileOutputStream(file)) {\n            p.store(out, "Rukkit Uplist configuration");\n        } catch (IOException ignored) {}\n    }\n'''
+          if old not in s:
+              raise SystemExit('ServerConfigEditor sync block not found')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+          # 2) ServerInstanceManager: cloned servers inherit the source Uplist
+          # config, then server edit can specialize it without touching the plugin.
+          p = Path('src/main/java/cn/rukkit/service/ServerInstanceManager.java')
+          s = p.read_text(encoding='utf-8')
+          old = '''        File sourceRound = new File(serverDir(source), "round.yml");\n        if (sourceRound.isFile()) copyFile(sourceRound, new File(dir, "round.yml"));\n        else writeRoundConfig(new File(dir, "round.yml"), Rukkit.getRoundConfig());\n        return "cloned " + source + " -> " + safeName + " (port " + port + ")";\n'''
+          new = '''        File sourceRound = new File(serverDir(source), "round.yml");\n        if (sourceRound.isFile()) copyFile(sourceRound, new File(dir, "round.yml"));\n        else writeRoundConfig(new File(dir, "round.yml"), Rukkit.getRoundConfig());\n\n        File sourceUplist = new File(serverDir(source), "uplist_config.properties");\n        if (sourceUplist.isFile()) copyFile(sourceUplist, new File(dir, "uplist_config.properties"));\n        ensureUplistConfig(dir, cfg);\n\n        return "cloned " + source + " -> " + safeName + " (port " + port + ")";\n'''
+          if old not in s:
+              raise SystemExit('ServerInstanceManager clone block not found')
+          s = s.replace(old, new, 1)
+
+          marker = '''    public String infoTarget(String target) {\n'''
+          helper = '''    private void ensureUplistConfig(File serverDir, RukkitConfig cfg) {\n        if (serverDir == null || cfg == null) return;\n        File file = new File(serverDir, "uplist_config.properties");\n        Properties p = new Properties();\n        if (file.isFile()) {\n            try (InputStream in = new FileInputStream(file)) { p.load(in); }\n            catch (IOException ignored) {}\n        }\n        p.setProperty("game_name", cfg.serverUser);\n        p.setProperty("max_player_count", Integer.toString(Math.max(1, cfg.maxPlayer)));\n        p.setProperty("port_number", Integer.toString(cfg.serverPort));\n        File roundFile = new File(serverDir, "round.yml");\n        try (FileReader reader = new FileReader(roundFile)) {\n            RoundConfig round = new Yaml().loadAs(reader, RoundConfig.class);\n            if (round != null && round.mapName != null && !round.mapName.trim().isEmpty()) {\n                p.setProperty("game_map", round.mapName);\n            }\n        } catch (Exception ignored) {}\n        if (!p.containsKey("created_by") || p.getProperty("created_by").trim().isEmpty()) {\n            p.setProperty("created_by", "Rukkit");\n        }\n        try (OutputStream out = new FileOutputStream(file)) {\n            p.store(out, "Rukkit Uplist configuration");\n        } catch (IOException ignored) {}\n    }\n\n'''
+          if marker not in s:
+              raise SystemExit('ServerInstanceManager insertion marker not found')
+          if 'private void ensureUplistConfig(File serverDir, RukkitConfig cfg)' not in s:
+              s = s.replace(marker, helper + marker, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Build Rukkit
+        run: ./gradlew buildRukkit --no-daemon
+
+      - name: Commit and remove migration workflow
+        run: |
+          rm -f .github/workflows/fix-uplist-child-config.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/java/cn/rukkit/service/ServerConfigEditor.java src/main/java/cn/rukkit/service/ServerInstanceManager.java .github/workflows/fix-uplist-child-config.yml
+          git commit -m 'Initialize per-server Uplist configuration'
+          git push origin HEAD:peremogabyde2
