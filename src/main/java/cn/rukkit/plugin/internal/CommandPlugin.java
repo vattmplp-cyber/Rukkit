@@ -855,7 +855,9 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 	}
 
 	private void broadcastAfkStart(NetworkRoom room, AfkSession session) {
-		String msg = "[" + session.requester.name + "] AFK timer started, '"
+		String requesterName = session.requester.name == null ? "" : session.requester.name;
+		if (requesterName.length() > 10) requesterName = requesterName.substring(0, 10) + "..";
+		String msg = "[" + requesterName + "] AFK timer started, '"
 				+ session.admin.name + "' has " + session.remainingSeconds
 				+ " seconds to send any chat message";
 		room.connectionManager.broadcastServerMessage(msg);
