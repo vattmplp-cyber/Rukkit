@@ -129,15 +129,23 @@ public class CommandManager
 	}
 
 	public void executeServerCommand(String cmd) {
-		String[] cmds = cmd.split("\\s+", 2);
+		String[] cmds = cmd.trim().split("\\s+", 2);
 		ServerCommand cmdObj = fetchServerCommand(cmds[0]);
 		if (cmdObj == null) {
 			System.out.println("Command not exist.Try 'help' to list all commands.");
 			return;
 		}
 		log.trace("cmd is:" + cmds[0]);
-		if (cmds.length > 1 && cmdObj.args > 0) {
-			String[] args = cmds[1].split(" ", cmdObj.args);
+		if (cmds.length > 1) {
+			String[] args;
+			if (cmdObj.args > 0) {
+				args = cmds[1].trim().split("\\s+", cmdObj.args);
+			} else {
+				// Server commands with args=0 may still accept variable arguments.
+				// Keep all tokens so commands such as "server start 1-8 background"
+				// reach ServerManagerCallback intact.
+				args = cmds[1].trim().split("\\s+");
+			}
 			cmdObj.getListener().onSend(args);
 		} else {
 			cmdObj.getListener().onSend(new String[0]);
