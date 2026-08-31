@@ -74,8 +74,6 @@ public class CommandManager
             return;
         }
 
-        // Commands can be received during the connection setup. Do not emit
-        // permission errors before a NetworkPlayer exists.
         if (connection.player == null) {
             return;
         }
@@ -85,7 +83,6 @@ public class CommandManager
                 ? Rukkit.getConfig().adminPermissions.get(cmdObj.cmd)
                 : Rukkit.getConfig().playerPermissions.get(cmdObj.cmd);
 
-        // Missing entries preserve the original Rukkit adminRequired behavior.
         if (allowed == null) {
             allowed = cmdObj.adminRequired ? isAdmin : true;
         }
@@ -97,8 +94,6 @@ public class CommandManager
             return;
         }
 
-        // Any admin chat-command activity cancels a running .afk countdown.
-        // .afk itself is intentionally excluded because it starts the countdown.
         if (isAdmin && !"afk".equalsIgnoreCase(cmdObj.cmd)) {
             notifyAdminActivity(connection);
         }
@@ -122,7 +117,13 @@ public class CommandManager
     }
 
     public void executeServerCommand(String cmd) {
-        String[] cmds = cmd.trim().split("\\s+", 2);
+        String trimmed = cmd == null ? "" : cmd.trim();
+        if (trimmed.isEmpty()) return;
+
+        String[] cmds = trimmed.split("\\s+", 2);
+
+        // "server" is a nested command. The edit action is handled separately
+        // because it accepts variable-length key=value assignments and quoted values.
         if (cmds.length > 1 && "server".equalsIgnoreCase(cmds[0])) {
             String[] serverArgs = cmds[1].trim().split("\\s+");
             if (serverArgs.length > 0 && "edit".equalsIgnoreCase(serverArgs[0])) {
@@ -142,9 +143,6 @@ public class CommandManager
             if (cmdObj.args > 0) {
                 args = cmds[1].trim().split("\\s+", cmdObj.args);
             } else {
-                // Server commands with args=0 may still accept variable arguments.
-                // Keep all tokens so commands such as "server start 1-8 background"
-                // reach ServerManagerCallback intact.
                 args = cmds[1].trim().split("\\s+");
             }
             cmdObj.getListener().onSend(args);
