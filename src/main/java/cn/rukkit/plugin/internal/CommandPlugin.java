@@ -137,52 +137,64 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 	}
 
 	public static class MapsCallback implements ChatCommandListener {
-		private int type;
-		public MapsCallback(int type) {
-			this.type = type;
+		private final int type;
+		public MapsCallback(int type) { this.type = type; }
+
+		private String mapFilterMessage() {
+			int min = Rukkit.getConfig().officialMapMinPlayers;
+			int max = Rukkit.getConfig().officialMapMaxPlayers;
+			if (min == max) return "Map selection is restricted to " + min + "-player maps on this server.";
+			return "Map selection is restricted to maps for " + min + "-" + max + " players on this server.";
 		}
+
 		@Override
 		public boolean onSend(RoomConnection con, String[] args) {
-			// TODO: Implement this method
-			// Maps
 			if (type == 0) {
 				StringBuilder build = new StringBuilder();
 				if (args.length > 0) {
 					build.append("- Maps -  Page ").append(args[0]).append(" \n");
 					int page = Integer.parseInt(args[0]) - 1;
-					for (int i = page * 10;i < OfficialMap.maps.length;i++) {
-						if (i > page * 10 + 10) break;
-						build.append(String.format("[%d] %s", i, OfficialMap.maps[i])).append("\n");
-					}
+					int from = Math.max(0, page * 10);
+					int to = Math.min(OfficialMap.maps.length, from + 10);
+					for (int i = from; i < to; i++) build.append(String.format("[%d] %s", i, OfficialMap.maps[i])).append("\n");
 				} else {
 					build.append("- Help -  Page 1 \n");
-					for (int i = 0;i < 10;i++) {
-						build.append(String.format("[%d] %s", i, OfficialMap.maps[i])).append("\n");
-					}
+					int to = Math.min(10, OfficialMap.maps.length);
+					for (int i = 0; i < to; i++) build.append(String.format("[%d] %s", i, OfficialMap.maps[i])).append("\n");
 				}
 				con.sendServerMessage(build.toString());
-			} else {
-				if (con.player.isAdmin && args.length > 0) {
-					if (args[0].startsWith("'")) {
-						String mapString = args[0].split("'")[1];
-						for (int i=0;i < OfficialMap.mapsName.length;i++) {
-							if (OfficialMap.mapsName[i].contains(mapString)) {
-								Rukkit.getRoundConfig().mapName = OfficialMap.maps[i];
-								Rukkit.getRoundConfig().mapType = 0;
-								try {
-									con.currectRoom.broadcast(Packet.serverInfo(con.currectRoom.config));
-									con.handler.ctx.writeAndFlush(Packet.serverInfo(con.currectRoom.config, true));
-								} catch (IOException ignored) {}
-								break;
-							}
-						}
-						//ChannelGroups.broadcast(new Packet().chat(p.playerName, "-map " + cmd[1], p.playerIndex));
-						return false;
+				return false;
+			}
+
+			if (!con.player.isAdmin || args.length == 0) return false;
+
+			if (args[0].startsWith("'")) {
+				String[] parts = args[0].split("'");
+				String mapString = parts.length > 1 ? parts[1] : args[0];
+				boolean found = false;
+				for (int i = 0; i < OfficialMap.mapsName.length; i++) {
+					if (OfficialMap.mapsName[i].toLowerCase(java.util.Locale.ROOT).contains(mapString.toLowerCase(java.util.Locale.ROOT))) {
+						Rukkit.getRoundConfig().mapName = OfficialMap.maps[i];
+						Rukkit.getRoundConfig().mapType = 0;
+						found = true;
+						try { con.currectRoom.broadcast(Packet.serverInfo(con.currectRoom.config)); con.handler.ctx.writeAndFlush(Packet.serverInfo(con.currectRoom.config, true)); } catch (IOException ignored) {}
+						break;
 					}
-					int id = Integer.parseInt(args[0]);
-					Rukkit.getRoundConfig().mapName = OfficialMap.maps[id];
-					Rukkit.getRoundConfig().mapType = 0;
 				}
+				if (!found && Rukkit.getConfig().officialMapFilterEnabled && OfficialMap.isMapFilteredOut(mapString, Rukkit.getConfig().officialMapMinPlayers, Rukkit.getConfig().officialMapMaxPlayers)) con.sendServerMessage(mapFilterMessage());
+				return false;
+			}
+
+			try {
+				int id = Integer.parseInt(args[0]);
+				if (id < 0 || id >= OfficialMap.maps.length) {
+					con.sendServerMessage("Invalid map selection. Use 'maps' to see the available maps.");
+					return false;
+				}
+				Rukkit.getRoundConfig().mapName = OfficialMap.maps[id];
+				Rukkit.getRoundConfig().mapType = 0;
+			} catch (NumberFormatException e) {
+				con.sendServerMessage("Invalid map selection. Use 'maps' to see the available maps.");
 			}
 			return false;
 		}

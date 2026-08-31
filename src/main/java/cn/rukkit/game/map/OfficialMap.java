@@ -164,4 +164,26 @@ public class OfficialMap
         maps = filteredMaps.toArray(new String[0]);
         mapsName = filteredNames.toArray(new String[0]);
     }
+
+    /**
+     * Returns true when a known official map exists in the complete catalog but
+     * is hidden by the configured player-count filter.
+     */
+    public static boolean isMapFilteredOut(String requested, int min, int max) {
+        if (requested == null || requested.trim().isEmpty()) return false;
+        if (min < 1) min = 1;
+        if (max < min) max = min;
+        String query = requested.trim().toLowerCase(java.util.Locale.ROOT);
+        for (int i = 0; i < ALL_MAPS.length; i++) {
+            String internal = ALL_MAPS[i];
+            String display = ALL_MAPS_NAME[i];
+            if (internal.toLowerCase(java.util.Locale.ROOT).contains(query)
+                    || display.toLowerCase(java.util.Locale.ROOT).contains(query)) {
+                int players = playerCount(internal);
+                return players >= 0 && (players < min || players > max);
+            }
+        }
+        return false;
+    }
+
 }
