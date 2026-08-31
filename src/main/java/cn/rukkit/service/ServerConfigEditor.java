@@ -16,7 +16,7 @@ import java.util.Properties;
  *
  * Rukkit settings are stored in rukkit.yml.
  * Uplist settings are stored separately in uplist_config.properties.
- * Uplist settings NEVER modify rukkit.yml.
+ * Uplist settings never modify rukkit.yml.
  */
 public final class ServerConfigEditor {
     private ServerConfigEditor() {}
@@ -29,10 +29,11 @@ public final class ServerConfigEditor {
         String normalized = normalizeKey(key);
         String value = stripQuotes(rawValue.trim());
 
-        // These keys belong exclusively to the per-server Uplist config.
+        // In this Rukkit/Uplist setup the master-list "server name" is the
+        // value carried by uplist_config.properties: game_map. Do not touch
+        // rukkit.yml when editing it.
         if (isUplistKey(normalized)) {
-            File serverDir = configFile.getParentFile();
-            return editUplist(serverDir, normalized, value);
+            return editUplist(configFile.getParentFile(), normalized, value);
         }
 
         Yaml yaml = new Yaml();
@@ -86,14 +87,16 @@ public final class ServerConfigEditor {
             case "servername":
             case "uplistname":
             case "gamename":
-            case "host":
-            case "hostname":
-            case "createdby":
-            case "uplisthost":
             case "map":
             case "mapname":
             case "uplistmap":
             case "gamemap":
+                return true;
+            case "host":
+            case "hostname":
+            case "createdby":
+            case "uplisthost":
+                return true;
             case "maxplayercount":
             case "uplistmaxplayercount":
             case "portnumber":
@@ -111,30 +114,28 @@ public final class ServerConfigEditor {
         File file = new File(serverDir, "uplist_config.properties");
         Properties p = new Properties();
         if (file.isFile()) {
-            try (InputStream in = new FileInputStream(file)) {
-                p.load(in);
-            }
+            try (InputStream in = new FileInputStream(file)) { p.load(in); }
         }
 
         String property;
         switch (key) {
+            // IMPORTANT: for this Uplist/master-server payload, the field the
+            // user uses as the public server name is game_map.
             case "name":
             case "servername":
             case "uplistname":
             case "gamename":
-                property = "game_name";
+            case "map":
+            case "mapname":
+            case "uplistmap":
+            case "gamemap":
+                property = "game_map";
                 break;
             case "host":
             case "hostname":
             case "createdby":
             case "uplisthost":
                 property = "created_by";
-                break;
-            case "map":
-            case "mapname":
-            case "uplistmap":
-            case "gamemap":
-                property = "game_map";
                 break;
             case "maxplayercount":
             case "uplistmaxplayercount":
@@ -182,9 +183,9 @@ public final class ServerConfigEditor {
             try (InputStream in = new FileInputStream(uplist)) { p.load(in); }
         }
 
-        return "Uplist name=" + p.getProperty("game_name", "<unset>") +
+        return "Uplist name=" + p.getProperty("game_map", "<unset>") +
                 " | host=" + p.getProperty("created_by", "<unset>") +
-                " | map=" + p.getProperty("game_map", "<unset>") +
+                " | map=" + p.getProperty("game_name", "<unset>") +
                 " | maxPlayers=" + p.getProperty("max_player_count", "<unset>") +
                 " | Rukkit filter=" + c.officialMapFilterEnabled +
                 " | mapPlayers=" + c.officialMapMinPlayers + "-" + c.officialMapMaxPlayers +
@@ -207,15 +208,14 @@ public final class ServerConfigEditor {
             "  afkCancelOnAdminChat, afkCancelOnAdminCommand, afkTransferControl\n" +
             "  maxUnitsPerPlayer, syncEnabled, checksumSync, onlineMode, singlePlayerMode, isDebug\n\n" +
             "Uplist settings (uplist_config.properties ONLY):\n" +
-            "  name/game_name - Назва сервера у master list\n" +
-            "  host/created_by - Ім'я хоста\n" +
-            "  map/game_map - Назва карти у master list\n" +
-            "  max_player_count - Кількість слотів у master list\n" +
-            "  port_number - Порт для Uplist config\n\n" +
-            "Examples:\n" +
-            "  server edit 11 name=\"DUELS 1 VS 1 [CA-C #1]\" host=SERVER map=\"[p2]Some Duel Map\" max_player_count=2\n" +
-            "  server edit 11-26 host=SERVER max_player_count=2\n" +
-            "  server edit 11-26 --stop name=\"DUELS\"";
+            "  name/serverName/game_name/map -> game_map (public server name)\n" +
+            "  host/hostname/created_by -> created_by\n" +
+            "  max_player_count -> max_player_count\n" +
+            "  port_number -> port_number\n\n" +
+            "Example:\n" +
+            "  server edit 11 name=\"DUELS 1 VS 1 [CA-C #1]\" host=SERVER\n" +
+            "  server edit 11-26 host=SERVER\n" +
+            "  server edit 11-26 name=\"DUELS 1 VS 1\" max_player_count=2";
     }
 
     private static String normalizeKey(String key) { return key.trim().replace("-", "").replace("_", "").toLowerCase(Locale.ROOT); }
