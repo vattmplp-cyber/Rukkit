@@ -46,6 +46,8 @@ public class NetworkRoom {
     private boolean isPaused = false;
     private ScheduledFuture gameTaskFuture;
     private ScheduledFuture<?> gameStartCountdownFuture;
+    private ScheduledFuture<?> gameEndGraceFuture;
+    private final AtomicInteger gameEndGraceRemaining = new AtomicInteger(0);
     private volatile boolean gameStartCountdownRunning = false;
     private final AtomicInteger gameStartCountdownRemaining = new AtomicInteger(0);
     private SaveManager saveManager;
@@ -171,16 +173,20 @@ public class NetworkRoom {
                 }
             }
             if (connectionManager.size() <= 0) {
+                cancelGameEndGrace();
                 stopGame();
                 Rukkit.getThreadManager().shutdownTask(gameTaskFuture);
                 return;
             }
 
             if (connectionManager.size() <= 1 && !cfg.singlePlayerMode) {
-                connectionManager.broadcastServerMessage("1 player left.Auto disconnecting...");
-                stopGame();
-                Rukkit.getThreadManager().shutdownTask(gameTaskFuture);
+                startGameEndGrace();
                 return;
+            }
+
+            // Both players are present again: cancel the pending end-of-game timer.
+            if (gameEndGraceFuture != null) {
+                cancelGameEndGrace();
             }
 
             synchronized (commandQuere) {
@@ -294,6 +300,52 @@ public class NetworkRoom {
         }
     }
 
+    private void startGameEndGrace() {
+        if (gameEndGraceFuture != null && !gameEndGraceFuture.isDone()) return;
+
+        final int graceSeconds = 15;
+        gameEndGraceRemaining.set(graceSeconds);
+        setPaused(true);
+        connectionManager.broadcastServerMessage(
+                "No opponents remain. The server will close the connection in " + graceSeconds + " seconds.");
+
+        gameEndGraceFuture = Rukkit.getThreadManager().schedule(new Runnable() {
+            @Override
+            public void run() {
+                if (connectionManager.size() >= 2) {
+                    cancelGameEndGrace();
+                    return;
+                }
+
+                if (connectionManager.size() <= 0) {
+                    cancelGameEndGrace();
+                    stopGame();
+                    return;
+                }
+
+                int left = gameEndGraceRemaining.decrementAndGet();
+                if (left == 10 || left == 5 || left == 1) {
+                    connectionManager.broadcastServerMessage(
+                            "No opponents remain. The server will close the connection in " + left + " seconds.");
+                }
+
+                if (left <= 0) {
+                    cancelGameEndGrace();
+                    stopGame();
+                }
+            }
+        }, 1000, 1000);
+    }
+
+    private void cancelGameEndGrace() {
+        if (gameEndGraceFuture != null) {
+            Rukkit.getThreadManager().shutdownTask(gameEndGraceFuture);
+            gameEndGraceFuture = null;
+        }
+        gameEndGraceRemaining.set(0);
+        if (isPaused) setPaused(false);
+    }
+
     public boolean isPaused() {
         return isPaused;
     }
@@ -318,6 +370,8 @@ public class NetworkRoom {
      * Stop a round game.
      */
     public void stopGame(boolean isRuturn) {
+
+        cancelGameEndGrace();
 
         // Reset ticktime and checksum
         currentStep = 0;
