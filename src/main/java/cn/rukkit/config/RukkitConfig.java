@@ -219,6 +219,13 @@ public class RukkitConfig extends BaseConfig
 		setNotificationDefault("rukkit.afk.warning", "'{adminName}' has {seconds} seconds to send any chat message");
 		setNotificationDefault("rukkit.afk.cancelled", "Countdown stopped!");
 		setNotificationDefault("rukkit.afk.transferred", "'{adminName}' is AFK, control switched to: '{newAdminName}'");
+		// Migrate the old AFK wording from existing rukkit.yml files.
+		if (notifications.get("rukkit.afk.start") != null && notifications.get("rukkit.afk.start").contains("perform an admin action")) {
+			notifications.put("rukkit.afk.start", "AFK timer started.\n'{adminName}' has {seconds} seconds to send any chat message");
+		}
+		if (notifications.get("rukkit.afk.warning") != null && notifications.get("rukkit.afk.warning").contains("perform an admin action")) {
+			notifications.put("rukkit.afk.warning", "'{adminName}' has {seconds} seconds to send any chat message");
+		}
 		if (helpHiddenCommands == null) helpHiddenCommands = new java.util.ArrayList<>();
 		if (!helpHiddenCommands.contains("qc")) helpHiddenCommands.add("qc");
 	}

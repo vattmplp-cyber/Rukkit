@@ -838,14 +838,14 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 
 	private boolean shouldAnnounceAfk(int seconds, int total) {
 		int interval = Math.max(1, Rukkit.getConfig().afkWarningIntervalSeconds);
-		int finalSeconds = Math.max(1, Rukkit.getConfig().afkFinalWarningSeconds);
-		return seconds == total || seconds % interval == 0 || seconds <= finalSeconds;
+		int finalSeconds = Math.max(0, Rukkit.getConfig().afkFinalWarningSeconds);
+		return seconds == total || seconds % interval == 0 || (finalSeconds > 0 && seconds == finalSeconds);
 	}
 
 	private void broadcastAfkStart(NetworkRoom room, AfkSession session) {
 		String msg = Rukkit.getConfig().notification(
 				"rukkit.afk.start",
-				"AFK timer started.\n'{adminName}' has {seconds} seconds to send a chat message or perform an admin action.",
+				"AFK timer started.\n'{adminName}' has {seconds} seconds to send any chat message",
 				"adminName", session.admin.name,
 				"seconds", session.remainingSeconds,
 				"requesterName", session.requester.name);
@@ -855,7 +855,7 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 	private void broadcastAfkWarning(NetworkRoom room, AfkSession session, int seconds) {
 		String msg = Rukkit.getConfig().notification(
 				"rukkit.afk.warning",
-				"'{adminName}' has {seconds} seconds to send a chat message or perform an admin action.",
+				"'{adminName}' has {seconds} seconds to send any chat message",
 				"adminName", session.admin.name,
 				"seconds", seconds);
 		room.connectionManager.broadcastServerMessage(msg);
@@ -947,6 +947,11 @@ public class CommandPlugin extends InternalRukkitPlugin implements ChatCommandLi
 	public void onLoad() {
 		// TODO: Implement this method
 		getLogger().info("CommandPlugin::onLoad()");
+		if (Rukkit.getConfig().officialMapFilterEnabled) {
+			OfficialMap.applyPlayerCountFilter(
+					Rukkit.getConfig().officialMapMinPlayers,
+					Rukkit.getConfig().officialMapMaxPlayers);
+		}
 		activeInstance = this;
 		CommandManager mgr = Rukkit.getCommandManager();
 		mgr.registerAdminCommandActivityListener(this::onAdminCommandActivity);
