@@ -1,7 +1,7 @@
 /*
  * Copyright 2020-2022 RukkitDev Team and contributors.
  *
- * This project uses GNU Affero General Public License v3.0.You can find this license in the following link.
+ * This project uses GNU Affero General Public License v3.0.You can find the license in the following link.
  * 本项目使用 GNU Affero General Public License v3.0 许可证，你可以在下方链接查看:
  *
  * https://github.com/RukkitDev/Rukkit/blob/master/LICENSE
@@ -197,7 +197,7 @@ public class RukkitConfig extends BaseConfig
 		setNotificationDefault("rukkit.gameStarting", "Game Starting {seconds}...");
 		setNotificationDefault("rukkit.afk.start", "AFK timer started.\n'{adminName}' has {seconds} seconds to send any chat message");
 		setNotificationDefault("rukkit.afk.warning", "'{adminName}' has {seconds} seconds to send any chat message");
-		setNotificationDefault("rukkit.afk.cancelled", "Countdown stopped!");
+		setNotificationDefault("rukkit.afk.cancelled", "AFK Countdown stopped");
 		setNotificationDefault("rukkit.afk.transferred", "'{adminName}' is AFK, control switched to: '{newAdminName}'");
 		if (notifications.get("rukkit.afk.start") != null && notifications.get("rukkit.afk.start").contains("perform an admin action")) {
 			notifications.put("rukkit.afk.start", "AFK timer started.\n'{adminName}' has {seconds} seconds to send any chat message");
