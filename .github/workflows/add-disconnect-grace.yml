@@ -1,0 +1,71 @@
+name: Add disconnect grace period
+
+on:
+  push:
+    branches:
+      - peremogabyde2
+    paths:
+      - '.github/workflows/add-disconnect-grace.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: peremogabyde2
+          fetch-depth: 0
+
+      - name: Patch NetworkRoom
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/main/java/cn/rukkit/network/NetworkRoom.java')
+          s = path.read_text(encoding='utf-8')
+
+          if 'gameEndGraceFuture' in s:
+              raise SystemExit('Grace-period patch already present')
+
+          s = s.replace(
+              '    private ScheduledFuture<?> gameStartCountdownFuture;\n',
+              '    private ScheduledFuture<?> gameStartCountdownFuture;\n    private ScheduledFuture<?> gameEndGraceFuture;\n    private final AtomicInteger gameEndGraceRemaining = new AtomicInteger(0);\n'
+          )
+
+          old = '''            if (connectionManager.size() <= 0) {\n                stopGame();\n                Rukkit.getThreadManager().shutdownTask(gameTaskFuture);\n                return;\n            }\n\n            if (connectionManager.size() <= 1 && !cfg.singlePlayerMode) {\n                connectionManager.broadcastServerMessage("1 player left.Auto disconnecting...");\n                stopGame();\n                Rukkit.getThreadManager().shutdownTask(gameTaskFuture);\n                return;\n            }\n'''
+
+          new = '''            if (connectionManager.size() <= 0) {\n                cancelGameEndGrace();\n                stopGame();\n                Rukkit.getThreadManager().shutdownTask(gameTaskFuture);\n                return;\n            }\n\n            if (connectionManager.size() <= 1 && !cfg.singlePlayerMode) {\n                startGameEndGrace();\n                return;\n            }\n\n            // Both players are present again: cancel the pending end-of-game timer.\n            if (gameEndGraceFuture != null) {\n                cancelGameEndGrace();\n            }\n'''
+
+          if old not in s:
+              raise SystemExit('Expected GameTask player-count block not found')
+          s = s.replace(old, new, 1)
+
+          marker = '    public boolean isPaused() {\n'
+          methods = '''    private void startGameEndGrace() {\n        if (gameEndGraceFuture != null && !gameEndGraceFuture.isDone()) return;\n\n        final int graceSeconds = 15;\n        gameEndGraceRemaining.set(graceSeconds);\n        setPaused(true);\n        connectionManager.broadcastServerMessage(\n                "No opponents remain. The server will close the connection in " + graceSeconds + " seconds.");\n\n        gameEndGraceFuture = Rukkit.getThreadManager().schedule(new Runnable() {\n            @Override\n            public void run() {\n                if (connectionManager.size() >= 2) {\n                    cancelGameEndGrace();\n                    return;\n                }\n\n                if (connectionManager.size() <= 0) {\n                    cancelGameEndGrace();\n                    stopGame();\n                    return;\n                }\n\n                int left = gameEndGraceRemaining.decrementAndGet();\n                if (left == 10 || left == 5 || left == 1) {\n                    connectionManager.broadcastServerMessage(\n                            "No opponents remain. The server will close the connection in " + left + " seconds.");\n                }\n\n                if (left <= 0) {\n                    cancelGameEndGrace();\n                    stopGame();\n                }\n            }\n        }, 1000, 1000);\n    }\n\n    private void cancelGameEndGrace() {\n        if (gameEndGraceFuture != null) {\n            Rukkit.getThreadManager().shutdownTask(gameEndGraceFuture);\n            gameEndGraceFuture = null;\n        }\n        gameEndGraceRemaining.set(0);\n        if (isPaused) setPaused(false);\n    }\n\n'''
+          if marker not in s:
+              raise SystemExit('Pause-method marker not found')
+          s = s.replace(marker, methods + marker, 1)
+
+          old_stop = '''    public void stopGame(boolean isRuturn) {\n\n        // Reset ticktime and checksum\n'''
+          new_stop = '''    public void stopGame(boolean isRuturn) {\n\n        cancelGameEndGrace();\n\n        // Reset ticktime and checksum\n'''
+          if old_stop not in s:
+              raise SystemExit('stopGame marker not found')
+          s = s.replace(old_stop, new_stop, 1)
+
+          path.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Build Rukkit
+        run: chmod +x ./gradlew && ./gradlew buildRukkit --no-daemon
+
+      - name: Commit patched source
+        run: |
+          rm -f .github/workflows/add-disconnect-grace.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/java/cn/rukkit/network/NetworkRoom.java .github/workflows/add-disconnect-grace.yml
+          git commit -m 'Add 15 second disconnect grace period'
+          git push origin HEAD:peremogabyde2
