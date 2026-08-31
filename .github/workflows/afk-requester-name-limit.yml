@@ -1,0 +1,56 @@
+name: Limit AFK requester name
+
+on:
+  push:
+    branches:
+      - peremogabyde2
+    paths:
+      - '.github/workflows/afk-requester-name-limit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: peremogabyde2
+          fetch-depth: 0
+
+      - name: Patch AFK start message
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('src/main/java/cn/rukkit/plugin/internal/CommandPlugin.java')
+          s = path.read_text(encoding='utf-8')
+
+          old = '''\tprivate void broadcastAfkStart(NetworkRoom room, AfkSession session) {\n\t\tString msg = "[" + session.requester.name + "] AFK timer started, '"\n\t\t\t\t+ session.admin.name + "' has " + session.remainingSeconds\n\t\t\t\t+ " seconds to send any chat message";\n\t\troom.connectionManager.broadcastServerMessage(msg);\n\t}\n'''
+
+          new = '''\tprivate void broadcastAfkStart(NetworkRoom room, AfkSession session) {\n\t\tString requesterName = session.requester.name == null ? "" : session.requester.name;\n\t\tif (requesterName.length() > 10) requesterName = requesterName.substring(0, 10) + "..";\n\t\tString msg = "[" + requesterName + "] AFK timer started, '"\n\t\t\t\t+ session.admin.name + "' has " + session.remainingSeconds\n\t\t\t\t+ " seconds to send any chat message";\n\t\troom.connectionManager.broadcastServerMessage(msg);\n\t}\n'''
+
+          if old not in s:
+              raise SystemExit('Expected AFK start block not found; refusing unsafe modification')
+          path.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
+
+      - name: Verify
+        run: |
+          grep -n "requesterName" src/main/java/cn/rukkit/plugin/internal/CommandPlugin.java
+          grep -n "substring(0, 10)" src/main/java/cn/rukkit/plugin/internal/CommandPlugin.java
+
+      - name: Build Rukkit
+        run: chmod +x ./gradlew && ./gradlew buildRukkit --no-daemon
+
+      - name: Commit and remove migration workflow
+        run: |
+          rm -f .github/workflows/afk-requester-name-limit.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/java/cn/rukkit/plugin/internal/CommandPlugin.java .github/workflows/afk-requester-name-limit.yml
+          git commit -m 'Limit AFK requester name to 10 characters'
+          git push origin HEAD:peremogabyde2
