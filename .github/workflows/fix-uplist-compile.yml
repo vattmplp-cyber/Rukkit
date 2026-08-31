@@ -1,0 +1,33 @@
+name: Fix Uplist config compile reference
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-uplist-compile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: peremogabyde2
+          fetch-depth: 0
+      - name: Fix RoundConfig reference
+        run: |
+          sed -i 's/RoundConfig round = new Yaml()/cn.rukkit.config.RoundConfig round = new Yaml()/g' src/main/java/cn/rukkit/service/ServerInstanceManager.java
+          sed -i 's/\.loadAs(reader, RoundConfig.class)/.loadAs(reader, cn.rukkit.config.RoundConfig.class)/g' src/main/java/cn/rukkit/service/ServerInstanceManager.java
+      - name: Build
+        run: ./gradlew buildRukkit --no-daemon
+      - name: Commit and remove workflow
+        run: |
+          rm -f .github/workflows/fix-uplist-compile.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main/java/cn/rukkit/service/ServerInstanceManager.java .github/workflows/fix-uplist-compile.yml
+          git commit -m 'Fix child Uplist config compile reference' || true
+          git push origin HEAD:peremogabyde2
