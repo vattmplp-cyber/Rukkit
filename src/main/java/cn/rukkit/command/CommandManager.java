@@ -1,7 +1,7 @@
 /*
  * Copyright 2020-2022 RukkitDev Team and contributors.
  *
- * This project uses GNU Affero General Public License v3.0.You can find the license at:
+ * This project uses GNU Affero General Public License v3.0.You can find the license in the following link.
  * https://github.com/RukkitDev/Rukkit/blob/master/LICENSE
  */
 
@@ -47,14 +47,12 @@ public class CommandManager
         }
     }
 
-    /** Register a listener that is notified when an admin performs a command/action. */
     public void registerAdminCommandActivityListener(Consumer<RoomConnection> listener) {
         if (listener != null && !adminActivityListeners.contains(listener)) {
             adminActivityListeners.add(listener);
         }
     }
 
-    /** Notify listeners about an administrator action. Safe to call from packet handlers. */
     public void notifyAdminActivity(RoomConnection connection) {
         if (connection == null || connection.player == null || !connection.player.isAdmin) return;
         for (Consumer<RoomConnection> listener : adminActivityListeners) {
@@ -73,30 +71,20 @@ public class CommandManager
             connection.sendServerMessage(LangUtil.getString("chat.invalidCommand"));
             return;
         }
-
-        if (connection.player == null) {
-            return;
-        }
+        if (connection.player == null) return;
 
         boolean isAdmin = connection.player.isAdmin;
         Boolean allowed = isAdmin
                 ? Rukkit.getConfig().adminPermissions.get(cmdObj.cmd)
                 : Rukkit.getConfig().playerPermissions.get(cmdObj.cmd);
 
-        if (allowed == null) {
-            allowed = cmdObj.adminRequired ? isAdmin : true;
-        }
-
+        if (allowed == null) allowed = cmdObj.adminRequired ? isAdmin : true;
         if (!allowed) {
-            log.debug("Permission denied: command={}, player={}, admin={}",
-                    cmdObj.cmd, connection.player.name, isAdmin);
+            log.debug("Permission denied: command={}, player={}, admin={}", cmdObj.cmd, connection.player.name, isAdmin);
             connection.sendServerMessage(LangUtil.getString("chat.privDenied"));
             return;
         }
-
-        if (isAdmin && !"afk".equalsIgnoreCase(cmdObj.cmd)) {
-            notifyAdminActivity(connection);
-        }
+        if (isAdmin && !"afk".equalsIgnoreCase(cmdObj.cmd)) notifyAdminActivity(connection);
 
         boolean result;
         log.trace("cmd is:" + cmds[0]);
@@ -108,10 +96,7 @@ public class CommandManager
         }
         if (result == true) {
             try {
-                connection.currectRoom.broadcast(
-                    Packet.chat(connection.player.name,
-                            "-" + cmd,
-                            connection.player.playerIndex));
+                connection.currectRoom.broadcast(Packet.chat(connection.player.name, "-" + cmd, connection.player.playerIndex));
             } catch (IOException e) {}
         }
     }
@@ -119,15 +104,14 @@ public class CommandManager
     public void executeServerCommand(String cmd) {
         String trimmed = cmd == null ? "" : cmd.trim();
         if (trimmed.isEmpty()) return;
-
         String[] cmds = trimmed.split("\\s+", 2);
 
-        // "server" is a nested command. The edit action is handled separately
-        // because it accepts variable-length key=value assignments and quoted values.
+        // Nested server edit needs quote-aware tokenization so values such as
+        // name="DUELS 1 VS 1 [CA-C #1]" remain one key=value assignment.
         if (cmds.length > 1 && "server".equalsIgnoreCase(cmds[0])) {
-            String[] serverArgs = cmds[1].trim().split("\\s+");
-            if (serverArgs.length > 0 && "edit".equalsIgnoreCase(serverArgs[0])) {
-                ServerConfigManagerCommand.execute(serverArgs);
+            List<String> serverArgs = tokenizePreservingQuotes(cmds[1]);
+            if (!serverArgs.isEmpty() && "edit".equalsIgnoreCase(serverArgs.get(0))) {
+                ServerConfigManagerCommand.execute(serverArgs.toArray(new String[0]));
                 return;
             }
         }
@@ -140,34 +124,60 @@ public class CommandManager
         log.trace("cmd is:" + cmds[0]);
         if (cmds.length > 1) {
             String[] args;
-            if (cmdObj.args > 0) {
-                args = cmds[1].trim().split("\\s+", cmdObj.args);
-            } else {
-                args = cmds[1].trim().split("\\s+");
-            }
+            if (cmdObj.args > 0) args = cmds[1].trim().split("\\s+", cmdObj.args);
+            else args = cmds[1].trim().split("\\s+");
             cmdObj.getListener().onSend(args);
         } else {
             cmdObj.getListener().onSend(new String[0]);
         }
     }
 
-    public ChatCommand fetchCommand(String cmd){
-        return loadedCommand.getOrDefault(cmd, null);
+    private List<String> tokenizePreservingQuotes(String text) {
+        List<String> tokens = new ArrayList<>();
+        if (text == null || text.trim().isEmpty()) return tokens;
+
+        StringBuilder current = new StringBuilder();
+        char quote = 0;
+        boolean escaped = false;
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (escaped) {
+                current.append(c);
+                escaped = false;
+                continue;
+            }
+            if (c == '\\') {
+                escaped = true;
+                continue;
+            }
+            if (quote != 0) {
+                if (c == quote) quote = 0;
+                else current.append(c);
+                continue;
+            }
+            if (c == '\"' || c == '\'') {
+                quote = c;
+                continue;
+            }
+            if (Character.isWhitespace(c)) {
+                if (current.length() > 0) {
+                    tokens.add(current.toString());
+                    current.setLength(0);
+                }
+            } else {
+                current.append(c);
+            }
+        }
+
+        if (escaped) current.append('\\');
+        if (current.length() > 0) tokens.add(current.toString());
+        return tokens;
     }
 
-    public ServerCommand fetchServerCommand(String cmd) {
-        return loadedServerCommand.getOrDefault(cmd, null);
-    }
-
-    public HashMap<String, ChatCommand> getLoadedCommand() {
-        return loadedCommand;
-    }
-
-    public HashMap<String, ServerCommand> getLoadedServerCommand() {
-        return loadedServerCommand;
-    }
-
-    public List<String> getLoadedServerCommandStringList() {
-        return serverCmdString;
-    }
+    public ChatCommand fetchCommand(String cmd){ return loadedCommand.getOrDefault(cmd, null); }
+    public ServerCommand fetchServerCommand(String cmd) { return loadedServerCommand.getOrDefault(cmd, null); }
+    public HashMap<String, ChatCommand> getLoadedCommand() { return loadedCommand; }
+    public HashMap<String, ServerCommand> getLoadedServerCommand() { return loadedServerCommand; }
+    public List<String> getLoadedServerCommandStringList() { return serverCmdString; }
 }
