@@ -11,7 +11,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 
-/** Safe editor for child-server rukkit.yml files. */
+/**
+ * Editor for child-server configuration files.
+ *
+ * Rukkit settings are stored in rukkit.yml.
+ * Uplist settings are stored separately in uplist_config.properties.
+ * Uplist settings NEVER modify rukkit.yml.
+ */
 public final class ServerConfigEditor {
     private ServerConfigEditor() {}
 
@@ -20,17 +26,22 @@ public final class ServerConfigEditor {
         if (key == null || key.trim().isEmpty()) throw new IllegalArgumentException("Missing setting name");
         if (rawValue == null) throw new IllegalArgumentException("Missing setting value");
 
+        String normalized = normalizeKey(key);
+        String value = stripQuotes(rawValue.trim());
+
+        // These keys belong exclusively to the per-server Uplist config.
+        if (isUplistKey(normalized)) {
+            File serverDir = configFile.getParentFile();
+            return editUplist(serverDir, normalized, value);
+        }
+
         Yaml yaml = new Yaml();
         RukkitConfig cfg;
         try (FileReader reader = new FileReader(configFile)) { cfg = yaml.loadAs(reader, RukkitConfig.class); }
         if (cfg == null) throw new IllegalArgumentException("Cannot read rukkit.yml");
 
-        String normalized = normalizeKey(key);
-        String value = stripQuotes(rawValue.trim());
-        boolean nameChanged = false;
-
         switch (normalized) {
-            case "name": case "serveruser": requireText(value); cfg.serverUser = value; nameChanged = true; break;
+            case "serveruser": case "rukkitname": requireText(value); cfg.serverUser = value; break;
             case "motd": case "servermotd": cfg.serverMotd = value; break;
             case "welcomemsg": cfg.welcomeMsg = value; break;
             case "maxplayer": cfg.maxPlayer = positiveInt(value, "maxPlayer"); break;
@@ -63,22 +74,89 @@ public final class ServerConfigEditor {
         if (cfg.officialMapMinPlayers < 0) cfg.officialMapMinPlayers = 0;
         if (cfg.officialMapMaxPlayers < cfg.officialMapMinPlayers) cfg.officialMapMaxPlayers = cfg.officialMapMinPlayers;
 
-        try (FileWriter writer = new FileWriter(configFile)) { writer.write(yaml.dumpAs(cfg, Tag.MAP, DumperOptions.FlowStyle.BLOCK)); }
-        if (nameChanged) syncUplistName(configFile.getParentFile(), value);
+        try (FileWriter writer = new FileWriter(configFile)) {
+            writer.write(yaml.dumpAs(cfg, Tag.MAP, DumperOptions.FlowStyle.BLOCK));
+        }
         return key + " = " + value;
     }
 
-    private static void syncUplistName(File serverDir, String name) {
-        if (serverDir == null) return;
+    private static boolean isUplistKey(String key) {
+        switch (key) {
+            case "name":
+            case "servername":
+            case "uplistname":
+            case "gamename":
+            case "host":
+            case "hostname":
+            case "createdby":
+            case "uplisthost":
+            case "map":
+            case "mapname":
+            case "uplistmap":
+            case "gamemap":
+            case "maxplayercount":
+            case "uplistmaxplayercount":
+            case "portnumber":
+            case "uplistport":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static String editUplist(File serverDir, String key, String value) throws Exception {
+        if (serverDir == null) throw new IllegalArgumentException("Server directory not found");
+        requireText(value);
+
         File file = new File(serverDir, "uplist_config.properties");
         Properties p = new Properties();
         if (file.isFile()) {
-            try (InputStream in = new FileInputStream(file)) { p.load(in); }
-            catch (IOException ignored) {}
+            try (InputStream in = new FileInputStream(file)) {
+                p.load(in);
+            }
         }
-        p.setProperty("game_name", name);
-        try (OutputStream out = new FileOutputStream(file)) { p.store(out, "Rukkit Uplist configuration"); }
-        catch (IOException ignored) {}
+
+        String property;
+        switch (key) {
+            case "name":
+            case "servername":
+            case "uplistname":
+            case "gamename":
+                property = "game_name";
+                break;
+            case "host":
+            case "hostname":
+            case "createdby":
+            case "uplisthost":
+                property = "created_by";
+                break;
+            case "map":
+            case "mapname":
+            case "uplistmap":
+            case "gamemap":
+                property = "game_map";
+                break;
+            case "maxplayercount":
+            case "uplistmaxplayercount":
+                property = "max_player_count";
+                break;
+            case "portnumber":
+            case "uplistport":
+                property = "port_number";
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported Uplist setting: " + key);
+        }
+
+        if ("max_player_count".equals(property) || "port_number".equals(property)) {
+            value = Integer.toString(positiveInt(value, property));
+        }
+
+        p.setProperty(property, value);
+        try (OutputStream out = new FileOutputStream(file)) {
+            p.store(out, "Rusted Warfare 1.15 Master Server Configuration");
+        }
+        return "uplist " + property + " = " + value;
     }
 
     public static String editMany(File configFile, List<String> assignments) throws Exception {
@@ -97,7 +175,23 @@ public final class ServerConfigEditor {
         RukkitConfig c;
         try (FileReader reader = new FileReader(configFile)) { c = yaml.loadAs(reader, RukkitConfig.class); }
         if (c == null) throw new IllegalArgumentException("Cannot read rukkit.yml");
-        return "name=" + c.serverUser + " | filter=" + c.officialMapFilterEnabled + " | mapPlayers=" + c.officialMapMinPlayers + "-" + c.officialMapMaxPlayers + " | startMin=" + c.minStartPlayer + " | maxPlayer=" + c.maxPlayer + " | maxRoom=" + c.maxRoom + " | AFK=" + c.afkEnabled;
+
+        Properties p = new Properties();
+        File uplist = new File(configFile.getParentFile(), "uplist_config.properties");
+        if (uplist.isFile()) {
+            try (InputStream in = new FileInputStream(uplist)) { p.load(in); }
+        }
+
+        return "Uplist name=" + p.getProperty("game_name", "<unset>") +
+                " | host=" + p.getProperty("created_by", "<unset>") +
+                " | map=" + p.getProperty("game_map", "<unset>") +
+                " | maxPlayers=" + p.getProperty("max_player_count", "<unset>") +
+                " | Rukkit filter=" + c.officialMapFilterEnabled +
+                " | mapPlayers=" + c.officialMapMinPlayers + "-" + c.officialMapMaxPlayers +
+                " | startMin=" + c.minStartPlayer +
+                " | Rukkit maxPlayer=" + c.maxPlayer +
+                " | maxRoom=" + c.maxRoom +
+                " | AFK=" + c.afkEnabled;
     }
 
     public static String help() {
@@ -105,18 +199,23 @@ public final class ServerConfigEditor {
             "  server edit <target> [--stop] key=value [key=value ...]\n" +
             "  server edit <target> --show\n" +
             "  server edit help\n\n" +
-            "Settings:\n" +
-            "  name/serverUser, serverMotd, welcomeMsg\n" +
-            "  maxPlayer, maxRoom, minStartPlayer\n" +
+            "Rukkit settings (rukkit.yml):\n" +
+            "  serverUser, serverMotd, welcomeMsg, maxPlayer, maxRoom, minStartPlayer\n" +
             "  officialMapFilterEnabled, officialMapMinPlayers, officialMapMaxPlayers\n" +
             "  gameStartCountdownEnabled, gameStartCountdownSeconds\n" +
             "  afkEnabled, afkCountdownSeconds, afkWarningIntervalSeconds, afkFinalWarningSeconds\n" +
             "  afkCancelOnAdminChat, afkCancelOnAdminCommand, afkTransferControl\n" +
             "  maxUnitsPerPlayer, syncEnabled, checksumSync, onlineMode, singlePlayerMode, isDebug\n\n" +
+            "Uplist settings (uplist_config.properties ONLY):\n" +
+            "  name/game_name - Назва сервера у master list\n" +
+            "  host/created_by - Ім'я хоста\n" +
+            "  map/game_map - Назва карти у master list\n" +
+            "  max_player_count - Кількість слотів у master list\n" +
+            "  port_number - Порт для Uplist config\n\n" +
             "Examples:\n" +
-            "  server edit 1-5 officialMapFilterEnabled=true officialMapMinPlayers=4 officialMapMaxPlayers=10 minStartPlayer=4\n" +
-            "  server edit 2 name=\"Canada #2\" serverMotd=\"Welcome\"\n" +
-            "  server edit 1-5 --stop officialMapMinPlayers=2 officialMapMaxPlayers=10";
+            "  server edit 11 name=\"DUELS 1 VS 1 [CA-C #1]\" host=SERVER map=\"[p2]Some Duel Map\" max_player_count=2\n" +
+            "  server edit 11-26 host=SERVER max_player_count=2\n" +
+            "  server edit 11-26 --stop name=\"DUELS\"";
     }
 
     private static String normalizeKey(String key) { return key.trim().replace("-", "").replace("_", "").toLowerCase(Locale.ROOT); }
